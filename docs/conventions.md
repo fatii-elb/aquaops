@@ -11,18 +11,28 @@ Everyone uses the same versions so that code runs identically on all machines.
 | --- | --- | --- |
 | Java (JDK) | **21 (LTS)** | Temurin recommended |
 | Build tool | **Maven**, via the `mvnw` wrapper | Nobody needs to install Maven |
-| Spring Boot | the current stable version on start.spring.io | Fix it here once the first skeleton is generated |
+| Spring Boot | **4.1.1** | Confirmed from the gateway skeleton, 8 Oct |
 | Node.js | LTS (to confirm with E4, Angular compatibility) | |
 | PostgreSQL | to confirm with E2 | |
 | Kafka | to confirm with E1 | |
-| Keycloak | to confirm with E2 | |
+| Keycloak | to confirm with E2 | Must run on port 8180 |
 
 ## 2. Repository layout
+
+```text
 aquaops/
-├── docs/ install guide, conventions, Definition of Done
-├── contracts/events/ the 3 Kafka event contracts (SCRUM-60)
-├── services/ one folder per backend service
-└── frontend/ the Angular application
+├── docs/                 install guide, conventions, Definition of Done
+├── contracts/events/     the 3 Kafka event contracts (SCRUM-60)
+├── services/             one folder per backend service
+│   ├── gateway/                 E5
+│   ├── telemetry-service/       E1
+│   ├── simulator/               E1
+│   ├── assets-service/          E2
+│   ├── detection-service/       E3
+│   ├── incidents-service/       E4
+│   └── notifications-service/   E6
+└── frontend/             the Angular application (E4, support E5)
+```
 
 Service folder names: lowercase, hyphens, ending in `-service`
 (`assets-service`, `telemetry-service`, …). Exceptions: `gateway`, `simulator`.
@@ -62,7 +72,7 @@ Each service prefixes **all** its own paths with its name:
 | Assets | `/api/assets/**` | `/api/assets/zones/3` |
 | Detection | `/api/detection/**` | `/api/detection/rules` |
 | Incidents | `/api/incidents/**` | `/api/incidents/12` |
-| Notifications | `/api/notifications/**` | |
+| Notifications | `/api/notifications/**` | `/api/notifications/subscribe` |
 
 Why: the gateway routes by the start of the path. Without the prefix, it cannot
 tell which service a request belongs to.
@@ -75,9 +85,18 @@ read from an environment variable with a local default:
 ```yaml
 server:
   port: ${ASSETS_PORT:8082}
+
+spring:
+  datasource:
+    url: ${ASSETS_DB_URL:jdbc:postgresql://localhost:5432/aquaops_assets}
+    username: ${DB_USER:aquaops}
+    password: ${DB_PASSWORD:aquaops}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 ```
 
-Reads as: "use the variable `ASSETS_PORT` if it exists, otherwise 8082".
+`${ASSETS_PORT:8082}` reads as: "use the variable `ASSETS_PORT` if it exists,
+otherwise 8082". The same code then runs on a laptop and on the shared server.
 
 Naming:
 
@@ -89,9 +108,9 @@ Naming:
 | Ending says the type | `_URL`, `_PORT`, `_HOST`, `_PASSWORD`, `_SECRET` |
 | Never a real secret as a default or in `.env.example` | `DB_PASSWORD=change-me` |
 
-All names are listed in `.env.example` at the repository root.
+All names are listed in [`.env.example`](../.env.example) at the repository root.
 
-> Note: Spring Boot does not read a `.env` file by itself. You need nothing
+> **Note:** Spring Boot does not read a `.env` file by itself. You need nothing
 > locally thanks to the defaults. To override a value, set it in your terminal
 > (`export ASSETS_PORT=9000`) or in your IDE run configuration.
 
@@ -110,5 +129,5 @@ Full Definition of Done: see `docs/definition-of-done.md` (TECH-7, E3).
 
 1. Does the simulator send readings to Telemetry over HTTP (through the gateway)
    or directly into Kafka? Affects the gateway and NFR-18.
-2. Spring Boot version to fix, once the first skeleton is generated.
-3. Node.js, PostgreSQL, Kafka and Keycloak versions (E1, E2, E4 to confirm).
+2. Node.js, PostgreSQL, Kafka and Keycloak versions (E1, E2, E4 to confirm).
+3. How is an incident's priority calculated (low, medium, high, critical)?
