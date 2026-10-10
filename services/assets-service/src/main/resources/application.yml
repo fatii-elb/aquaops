@@ -11,6 +11,11 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/aquaops}
 management:
   endpoints:
     web:
