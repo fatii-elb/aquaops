@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sensor-readings.v1",
+  "title": "SensorReading",
+  "description": "BROUILLON v1 (proposition E1). Mesure émise par un capteur simulé sur le topic sensor-readings. À aligner avec la règle de versionnement de E6 et avec les identifiants de l'API des actifs (E2).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventVersion", "sensorId", "zoneId", "type", "measuredAt"],
+  "properties": {
+    "eventVersion": { "const": "1", "description": "Version du contrat." },
+    "sensorId": { "type": "integer", "description": "Identifiant du capteur (assets-service). Type à confirmer avec E2." },
+    "zoneId": { "type": "integer", "description": "Identifiant de la zone (assets-service). Obligatoire (FR-02)." },
+    "type": { "enum": ["PRESSURE", "FLOW", "LEVEL", "PUMP_STATE"], "description": "Pression, débit, niveau, état de pompe (FR-03)." },
+    "value": { "type": "number", "description": "Valeur mesurée. Obligatoire sauf pour PUMP_STATE." },
+    "unit": { "type": "string", "description": "Unité, par exemple bar, m3/h, m." },
+    "pumpState": { "enum": ["NORMAL", "FAULT"], "description": "Seulement pour PUMP_STATE (FR-11)." },
+    "measuredAt": { "type": "string", "format": "date-time", "description": "Horodatage de la mesure, UTC, ISO 8601." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "PUMP_STATE" } }, "required": ["type"] },
+      "then": { "required": ["pumpState"] },
+      "else": { "required": ["value"] }
+    }
+  ],
+  "examples": [
+    { "eventVersion": "1", "sensorId": 12, "zoneId": 3, "type": "PRESSURE", "value": 2.4, "unit": "bar", "measuredAt": "2026-10-12T21:30:00Z" },
+    { "eventVersion": "1", "sensorId": 15, "zoneId": 3, "type": "PUMP_STATE", "pumpState": "FAULT", "measuredAt": "2026-10-12T21:30:01Z" }
+  ]
+}
