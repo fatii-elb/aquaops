@@ -1,0 +1,10 @@
+server:
+  port: ${SIMULATOR_PORT:8086}
+spring:
+  application:
+    name: simulator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
