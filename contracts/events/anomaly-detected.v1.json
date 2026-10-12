@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "anomaly-detected.v1",
+  "title": "AnomalyDetected",
+  "description": "BROUILLON v1 (proposition E3). Anomalie détectée par une règle, sur le topic anomaly-detected. Consommée par incidents-service (E4) et notifications (E6). À aligner avec la règle de versionnement de E6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventVersion", "anomalyId", "type", "zoneId", "detectedAt", "measuredAt"],
+  "properties": {
+    "eventVersion": { "const": "1", "description": "Version du contrat." },
+    "anomalyId": { "type": "string", "description": "Identifiant unique de l'anomalie (UUID)." },
+    "type": { "enum": ["LEAK_SUSPECTED", "SENSOR_SILENT", "PUMP_FAULT", "LOW_LEVEL"], "description": "Fuite probable (FR-09), capteur silencieux (FR-10), pompe en défaut (FR-11), niveau bas (FR-12)." },
+    "zoneId": { "type": "integer", "description": "Zone concernée." },
+    "sensorId": { "type": "integer", "description": "Capteur à l'origine de l'anomalie, si applicable." },
+    "dedupKey": { "type": "string", "description": "Clé de déduplication d'une anomalie persistante (FR-14), par exemple type:zoneId:sensorId." },
+    "severity": { "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"], "description": "Gravité proposée. Le calcul de la priorité d'un incident reste à valider avec l'encadrant : champ optionnel." },
+    "measuredAt": { "type": "string", "format": "date-time", "description": "Horodatage de la mesure qui a déclenché l'anomalie (sert à mesurer la latence NFR-02)." },
+    "detectedAt": { "type": "string", "format": "date-time", "description": "Horodatage de la détection, UTC, ISO 8601." },
+    "details": { "type": "object", "description": "Informations libres : valeurs, seuils franchis." }
+  },
+  "examples": [
+    { "eventVersion": "1", "anomalyId": "7b0f2a3e-4c1d-4e6a-9d52-1f3c8a9b0e11", "type": "LEAK_SUSPECTED", "zoneId": 3, "sensorId": 12, "dedupKey": "LEAK_SUSPECTED:3:12", "severity": "CRITICAL", "measuredAt": "2026-10-12T21:30:00Z", "detectedAt": "2026-10-12T21:30:04Z", "details": { "pressureBar": 1.1, "flowM3h": 48.0 } }
+  ]
+}
