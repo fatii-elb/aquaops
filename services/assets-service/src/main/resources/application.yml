@@ -1,0 +1,23 @@
+server:
+  port: ${ASSETS_PORT:8082}
+spring:
+  application:
+    name: assets-service
+  datasource:
+    url: ${ASSETS_DB_URL:jdbc:postgresql://localhost:5432/aquaops_assets}
+    username: ${DB_USER:aquaops}
+    password: ${DB_PASSWORD:aquaops}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/aquaops}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
