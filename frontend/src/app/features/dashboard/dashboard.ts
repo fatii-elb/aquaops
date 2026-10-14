@@ -1,7 +1,33 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-dashboard',
-  template: `<main style="font-family:sans-serif;margin:2rem"><h1>Tableau de bord</h1><p>Page protégée à l'étape SCRUM-45.</p></main>`,
+  imports: [RouterLink],
+  templateUrl: './dashboard.html',
+  host: { class: 'block' },
 })
-export class Dashboard {}
+export class Dashboard implements OnDestroy {
+  userName = 'GouloJK';
+
+  now = signal(Dashboard.formatNow());
+  refreshing = signal(false);
+
+  private timer = setInterval(() => this.now.set(Dashboard.formatNow()), 30000);
+
+  private static formatNow(): string {
+    const d = new Date();
+    const date = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    return `${date} • ${time}`;
+  }
+
+  refresh() {
+    this.refreshing.set(true);
+    setTimeout(() => this.refreshing.set(false), 800);
+  }
+
+  ngOnDestroy() {
+    clearInterval(this.timer);
+  }
+}
