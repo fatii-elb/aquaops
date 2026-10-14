@@ -1,0 +1,241 @@
+openapi: 3.0.3
+info:
+  title: AquaOps - incidents-service
+  version: "0.1.0"
+  description: |
+    Version de base (SCRUM-60), rédigée par E4. Port 8084, variable INCIDENTS_PORT.
+    Via la passerelle, les chemins commencent par /api/incidents/.
+    Un incident est créé à partir d'une anomalie reçue sur le topic Kafka anomaly-detected,
+    ou à la main. Chaque changement est publié sur le topic incident-events
+    (contrat contracts/events/incident-events.v1.json).
+    Ce qui est marqué "à confirmer" n'est pas encore décidé par l'équipe.
+servers:
+  - url: http://localhost:8084
+    description: Service seul, en local
+paths:
+  /actuator/health:
+    get:
+      summary: État du service
+      responses:
+        "200":
+          description: Le service fonctionne.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+  /api/incidents:
+    get:
+      summary: Liste des incidents
+      description: Filtres possibles (à confirmer) par statut et par zone.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/IncidentStatus"
+        - name: zoneId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Liste des incidents.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Incident"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      summary: Créer un incident
+      description: Les rôles autorisés à créer sont à confirmer avec FR-23.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentCreate"
+      responses:
+        "201":
+          description: Incident créé. Un événement INCIDENT_CREATED est publié sur incident-events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          description: Champ invalide ou manquant (titre vide, zone absente ou inexistante).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/incidents/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Détail d'un incident
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: L'incident.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Modifier un incident (statut, priorité, assignation)
+      description: |
+        Chaque changement de statut ou d'assignation publie un événement sur incident-events.
+        Les transitions de statut autorisées sont à confirmer.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentUpdate"
+      responses:
+        "200":
+          description: Incident modifié.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          description: Champ invalide ou transition de statut refusée.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Jeton Keycloak (realm aquaops). Les rôles sont lus dans realm_access.roles :
+        operateur, superviseur, technicien, administrateur. Droits par rôle à confirmer (FR-23).
+        La protection n'est pas encore branchée sur ce service (prévue après SCRUM-45).
+  responses:
+    Unauthorized:
+      description: Aucun jeton, ou jeton invalide.
+    Forbidden:
+      description: Jeton valide mais rôle insuffisant.
+    NotFound:
+      description: Incident introuvable.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    IncidentStatus:
+      type: string
+      enum: [OPEN, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED]
+      description: Mêmes valeurs que le champ status du contrat incident-events (liste à confirmer).
+    IncidentPriority:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+      description: Le calcul de la priorité reste à valider avec l'encadrant (champ facultatif).
+    Incident:
+      type: object
+      required: [id, title, zoneId, status, createdAt]
+      properties:
+        id:
+          type: integer
+          example: 42
+        title:
+          type: string
+          example: Chute de pression en zone 3
+        description:
+          type: string
+        anomalyId:
+          type: string
+          format: uuid
+          description: Anomalie à l'origine de l'incident (champ anomalyId du topic anomaly-detected), si elle existe.
+        zoneId:
+          type: integer
+          description: Zone concernée (identifiant du service des actifs).
+          example: 3
+        status:
+          $ref: "#/components/schemas/IncidentStatus"
+        priority:
+          $ref: "#/components/schemas/IncidentPriority"
+        assignedTo:
+          type: string
+          description: Nom d'utilisateur du technicien assigné.
+          example: test-technicien
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    IncidentCreate:
+      type: object
+      required: [title, zoneId]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        anomalyId:
+          type: string
+          format: uuid
+        zoneId:
+          type: integer
+        priority:
+          $ref: "#/components/schemas/IncidentPriority"
+    IncidentUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: "#/components/schemas/IncidentStatus"
+        priority:
+          $ref: "#/components/schemas/IncidentPriority"
+        assignedTo:
+          type: string
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: La zone 99 n'existe pas.
