@@ -1,0 +1,28 @@
+openapi: 3.1.0
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:8085
+  description: Generated server url
+tags:
+- name: Notifications
+  description: Service de notifications AquaOps
+paths:
+  /api/notifications/status:
+    get:
+      tags:
+      - Notifications
+      summary: État du service
+      description: Indique que le service notifications fonctionne.
+      operationId: status
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+components: {}
