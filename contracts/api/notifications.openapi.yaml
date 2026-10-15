@@ -1,36 +1,28 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
-  title: AquaOps - notifications-service
-  version: "0.1.0"
-  description: |
-    Version de base (SCRUM-60), rédigée par E6. Port 8085, variable NOTIFICATIONS_PORT.
-    Via la passerelle, les chemins commencent par /api/notifications/.
-    Ce qui est marqué "à confirmer" n'est pas encore décidé par l'équipe.
+  title: OpenAPI definition
+  version: v0
 servers:
-  - url: http://localhost:8085
-    description: Service seul, en local
+- url: http://localhost:8085
+  description: Generated server url
+tags:
+- name: Notifications
+  description: Service de notifications AquaOps
 paths:
-  /actuator/health:
+  /api/notifications/status:
     get:
+      tags:
+      - Notifications
       summary: État du service
+      description: Indique que le service notifications fonctionne.
+      operationId: status
       responses:
         "200":
-          description: Le service fonctionne.
+          description: OK
           content:
-            application/json:
+            '*/*':
               schema:
                 type: object
-                properties:
-                  status:
-                    type: string
-                    example: UP
-  /api/notifications/subscribe:
-    get:
-      summary: S'abonner aux notifications (prévu, à confirmer)
-      description: |
-        Chemin cité en exemple dans docs/conventions.md.
-        Le protocole (WebSocket ou autre) et le format des messages
-        sont à confirmer avec l'équipe.
-      responses:
-        "200":
-          description: À confirmer.
+                additionalProperties:
+                  type: string
+components: {}
