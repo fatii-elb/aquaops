@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nom-du-topic.v1",
+  "title": "NomDeLEvenement",
+  "description": "MODELE. Qui produit cet evenement, qui le consomme, et a quoi il sert.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventVersion", "champObligatoire", "occurredAt"],
+  "properties": {
+    "eventVersion": { "const": "1", "description": "Version du contrat." },
+    "champObligatoire": { "type": "string", "description": "Un champ que tous les messages contiennent." },
+    "champOptionnel": { "type": "integer", "description": "Un champ present seulement dans certains cas." },
+    "occurredAt": { "type": "string", "format": "date-time", "description": "Horodatage de l'evenement, UTC, ISO 8601." }
+  },
+  "examples": [
+    { "eventVersion": "1", "champObligatoire": "valeur", "occurredAt": "2026-10-12T21:30:00Z" }
+  ]
+}
