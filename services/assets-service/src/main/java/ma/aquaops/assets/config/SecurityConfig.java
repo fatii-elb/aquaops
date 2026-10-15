@@ -13,6 +13,9 @@ public class SecurityConfig {
 
     private static final String[] TOUS = {"operateur", "superviseur", "technicien", "administrateur"};
     private static final String[] ECRITURE = {"administrateur", "superviseur"};
+    // Changement de statut d'une intervention : le controleur verifie ensuite
+    // que le technicien est bien celui qui est assigne (SCRUM-42).
+    private static final String[] STATUT_INTERVENTION = {"technicien", "superviseur", "administrateur"};
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -24,6 +27,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/assets/**").hasAnyRole(TOUS)
+                // Regle precise AVANT la regle generale PUT : la premiere qui correspond s'applique.
+                .requestMatchers(HttpMethod.PUT, "/api/assets/interventions/*/status").hasAnyRole(STATUT_INTERVENTION)
                 .requestMatchers(HttpMethod.POST, "/api/assets/**").hasAnyRole(ECRITURE)
                 .requestMatchers(HttpMethod.PUT, "/api/assets/**").hasAnyRole(ECRITURE)
                 .requestMatchers(HttpMethod.DELETE, "/api/assets/**").hasAnyRole(ECRITURE)
