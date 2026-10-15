@@ -37,6 +37,7 @@ Modèle de test unitaire : `ExempleTests.java`, présent dans chaque service (ex
     cd services/<nom-du-service>
     ./mvnw test                          # tous les tests du service
     ./mvnw test -Dtest=ExempleTests      # un seul test, sans démarrer Spring
+    start target/site/jacoco/index.html  # ouvrir le rapport de couverture (Windows)
 
 Prérequis : Java 21. Les tests d'intégration d'`assets-service` et de `telemetry-service` demandent PostgreSQL démarré et la base du service créée. Les tests unitaires ne demandent rien.
 
@@ -54,9 +55,14 @@ Prérequis : Java 21. Les tests d'intégration d'`assets-service` et de `telemet
 | telemetry-service | présent |
 | detection-service | présent |
 | simulator | présent |
-| notifications-service | à ajouter quand le squelette est fusionné dans `main` |
+| notifications-service | `StatusControllerTests` (test unitaire du contrôleur) |
 | incidents-service | à ajouter quand le squelette est fusionné dans `main` |
 
-## 7. À venir
+## 7. Rapport de couverture (JaCoCo)
 
-- Rapport de couverture (JaCoCo), semaine 2 de ce sprint.
+JaCoCo mesure la part du code exécutée par les tests. Il est branché dans `assets-service`, `telemetry-service`, `detection-service`, `simulator` et `notifications-service`.
+
+- Le rapport est généré à chaque `./mvnw test`, dans `target/site/jacoco/index.html` (dossier du service).
+- Aucun seuil minimal n'est exigé pour l'instant : la carte demande seulement de produire le rapport.
+- Pour un nouveau service : ajouter le plugin `org.jacoco:jacoco-maven-plugin` (version 0.8.13, objectifs `prepare-agent` et `report`) dans la balise `<plugins>` de son `pom.xml`, comme dans `notifications-service`.
+- `incidents-service` n'a pas encore JaCoCo ni de test exemple (son squelette n'est pas encore dans `main`).
