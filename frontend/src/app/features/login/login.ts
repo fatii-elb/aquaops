@@ -1,6 +1,7 @@
-import { Component, OnDestroy, signal } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-login',
@@ -9,6 +10,10 @@ import { Router } from '@angular/router';
   host: { class: 'block' },
 })
 export class Login implements OnDestroy {
+  private auth = inject(AuthService);
+  private router = inject(Router);
+
+  // Champs du formulaire : la saisie réelle se fait sur la page de Keycloak.
   username = '';
   password = '';
   remember = true;
@@ -18,7 +23,12 @@ export class Login implements OnDestroy {
 
   private timer = setInterval(() => this.now.set(Login.formatNow()), 30000);
 
-  constructor(private router: Router) {}
+  constructor() {
+    // Retour de Keycloak : si le jeton est valide, on va directement au tableau de bord.
+    if (this.auth.isLoggedIn()) {
+      this.router.navigate(['/dashboard']);
+    }
+  }
 
   private static formatNow(): string {
     const d = new Date();
@@ -32,11 +42,7 @@ export class Login implements OnDestroy {
   }
 
   submit() {
-    if (!this.username || !this.password) {
-      return;
-    }
-    // TECH-6: pas de vraie authentification. Keycloak sera branché à l'étape SCRUM-45.
-    this.router.navigate(['/dashboard']);
+    this.auth.login();
   }
 
   ngOnDestroy() {
