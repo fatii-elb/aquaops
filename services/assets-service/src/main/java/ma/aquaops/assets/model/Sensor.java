@@ -15,4 +15,9 @@ public class Sensor {
     public SensorType type;
     @NotNull
     public Long zoneId;
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    public AssetType assetType;
+    @NotNull
+    public Long assetId;
 }
