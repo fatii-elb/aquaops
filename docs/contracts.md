@@ -10,7 +10,7 @@ La règle de versionnement est dans `contracts/events/README.md`. Les schémas J
 |---|---|---|---|---|
 | `sensor-readings` | `contracts/events/sensor-readings.v1.json` | E1 (télémétrie) | E3 (détection), stockage télémétrie | brouillon v1 |
 | `anomaly-detected` | `contracts/events/anomaly-detected.v1.json` | E3 (détection) | E4 (incidents), E6 (notifications) | brouillon v1 |
-| `incident-events` | `contracts/events/incident-events.v1.json` | E4 (incidents) | E6 (notifications), audit | brouillon v1 d'E4, en revue |
+| `incident-events` | `contracts/events/incident-events.v1.json` | E4 (incidents) | E6 (notifications), audit | brouillon v1 |
 
 ## 2. Exemples de messages
 
@@ -30,7 +30,7 @@ La règle de versionnement est dans `contracts/events/README.md`. Les schémas J
 
 ### incident-events
 
-Brouillon v1 d'E4, produit par incidents-service, lu par notifications-service. Fichier : `contracts/events/incident-events.v1.json` (branche `feature/SCRUM-60-contract-incident-events`, pas encore dans `main`).
+Brouillon v1 d'E4, produit par incidents-service, lu par notifications-service. Fichier : `contracts/events/incident-events.v1.json` (dans `main`).
 
 - `eventType` : INCIDENT_CREATED, INCIDENT_ASSIGNED, INCIDENT_STATUS_CHANGED, INCIDENT_RESOLVED ou INCIDENT_CLOSED.
 - Champs obligatoires : `eventVersion`, `eventType`, `incidentId`, `zoneId`, `status`, `occurredAt`.
@@ -42,7 +42,7 @@ Brouillon v1 d'E4, produit par incidents-service, lu par notifications-service. 
 |---|---|---|
 | notifications-service | `/api/notifications/**` | `contracts/api/notifications.openapi.yaml`, générée par le service (page Swagger : `/api/notifications/swagger-ui.html`) |
 | assets-service | `/api/assets/**` | à fournir par E2 |
-| incidents-service | `/api/incidents/**` | brouillon d'E4, en revue : `contracts/api/incidents.openapi.yaml` (branche `feature/SCRUM-60-openapi-incidents`) |
+| incidents-service | `/api/incidents/**` | `contracts/api/incidents.openapi.yaml` (brouillon d'E4, dans `main`) |
 | telemetry-service | `/api/telemetry/**` | à fournir par E1 |
 | detection-service | `/api/detection/**` | à fournir par E3 |
 

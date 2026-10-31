@@ -56,13 +56,13 @@ Prérequis : Java 21. Les tests d'intégration d'`assets-service` et de `telemet
 | detection-service | présent |
 | simulator | présent |
 | notifications-service | `StatusControllerTests` (test unitaire du contrôleur) |
-| incidents-service | à ajouter quand le squelette est fusionné dans `main` |
+| incidents-service | présent |
 
 ## 7. Rapport de couverture (JaCoCo)
 
-JaCoCo mesure la part du code exécutée par les tests. Il est branché dans `assets-service`, `telemetry-service`, `detection-service`, `simulator` et `notifications-service`.
+JaCoCo mesure la part du code exécutée par les tests. Il est branché dans `assets-service`, `telemetry-service`, `detection-service`, `simulator`, `notifications-service` et `incidents-service`.
 
 - Le rapport est généré à chaque `./mvnw test`, dans `target/site/jacoco/index.html` (dossier du service).
 - Aucun seuil minimal n'est exigé pour l'instant : la carte demande seulement de produire le rapport.
 - Pour un nouveau service : ajouter le plugin `org.jacoco:jacoco-maven-plugin` (version 0.8.13, objectifs `prepare-agent` et `report`) dans la balise `<plugins>` de son `pom.xml`, comme dans `notifications-service`.
-- `incidents-service` n'a pas encore JaCoCo ni de test exemple (son squelette n'est pas encore dans `main`).
+- Les six services ont maintenant JaCoCo.
