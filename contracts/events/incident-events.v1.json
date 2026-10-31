@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "incident-events.v1",
+  "title": "IncidentEvent",
+  "description": "BROUILLON v1. Produit par incidents-service (E4) a chaque changement d'un incident. Consomme par notifications-service (E6) et l'audit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventVersion", "eventType", "incidentId", "zoneId", "status", "occurredAt"],
+  "properties": {
+    "eventVersion": { "const": "1", "description": "Version du contrat." },
+    "eventType": {
+      "enum": ["INCIDENT_CREATED", "INCIDENT_ASSIGNED", "INCIDENT_STATUS_CHANGED", "INCIDENT_RESOLVED", "INCIDENT_CLOSED"],
+      "description": "Ce qui vient de se passer sur l'incident."
+    },
+    "incidentId": { "type": "integer", "description": "Identifiant de l'incident (service des incidents)." },
+    "anomalyId": { "type": "string", "format": "uuid", "description": "Anomalie a l'origine de l'incident (champ anomalyId de anomaly-detected), si l'incident vient d'une anomalie." },
+    "zoneId": { "type": "integer", "description": "Zone concernee (identifiant du service des actifs)." },
+    "status": {
+      "enum": ["OPEN", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED"],
+      "description": "Etat de l'incident apres l'evenement."
+    },
+    "priority": {
+      "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+      "description": "Priorite de l'incident. Facultative : le calcul de la priorite reste a valider avec l'encadrant."
+    },
+    "assignedTo": { "type": "string", "description": "Nom d'utilisateur du technicien assigne, s'il y en a un." },
+    "measuredAt": { "type": "string", "format": "date-time", "description": "Mesure a l'origine de l'anomalie (reprise de anomaly-detected), pour calculer la latence de bout en bout (NFR-02)." },
+    "occurredAt": { "type": "string", "format": "date-time", "description": "Horodatage de l'evenement, UTC, ISO 8601." }
+  },
+  "examples": [
+    {
+      "eventVersion": "1",
+      "eventType": "INCIDENT_CREATED",
+      "incidentId": 42,
+      "anomalyId": "7b0f2a3e-4c1d-4e6a-9d52-1f3c8a9b0e11",
+      "zoneId": 3,
+      "status": "OPEN",
+      "priority": "CRITICAL",
+      "measuredAt": "2026-10-12T21:30:00Z",
+      "occurredAt": "2026-10-12T21:30:05Z"
+    },
+    {
+      "eventVersion": "1",
+      "eventType": "INCIDENT_ASSIGNED",
+      "incidentId": 42,
+      "zoneId": 3,
+      "status": "ASSIGNED",
+      "assignedTo": "test-technicien",
+      "occurredAt": "2026-10-12T21:35:00Z"
+    }
+  ]
+}
