@@ -1,5 +1,6 @@
-import { Component, OnDestroy, signal } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -8,7 +9,10 @@ import { RouterLink } from '@angular/router';
   host: { class: 'block' },
 })
 export class Dashboard implements OnDestroy {
-  userName = 'GouloJK';
+  private auth = inject(AuthService);
+
+  // Nom de l'utilisateur connecté (lu dans le jeton Keycloak).
+  userName = this.auth.username || 'GouloJK';
 
   now = signal(Dashboard.formatNow());
   refreshing = signal(false);
@@ -25,6 +29,10 @@ export class Dashboard implements OnDestroy {
   refresh() {
     this.refreshing.set(true);
     setTimeout(() => this.refreshing.set(false), 800);
+  }
+
+  logout() {
+    this.auth.logout();
   }
 
   ngOnDestroy() {

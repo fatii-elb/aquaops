@@ -80,7 +80,7 @@
             <span class="font-body-md text-body-md">Observabilité</span>
           </div>
         </a>
-        <a class="flex items-center justify-between px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors">
+        <a routerLink="/administration" class="flex items-center justify-between px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors">
           <div class="flex items-center gap-space-md">
             <span class="material-symbols-outlined text-[20px]">admin_panel_settings</span>
             <span class="font-body-md text-body-md">Administration</span>
@@ -110,7 +110,7 @@
             <span class="font-label-sm text-label-sm text-secondary leading-tight">Superviseur réseau</span>
           </div>
         </div>
-        <a routerLink="/login" class="p-1.5 rounded-lg text-secondary hover:text-error hover:bg-error-container/40 transition-colors" title="Déconnexion">
+        <a (click)="logout()" class="p-1.5 rounded-lg text-secondary hover:text-error hover:bg-error-container/40 transition-colors" title="Déconnexion">
           <span class="material-symbols-outlined text-[18px]">logout</span>
         </a>
       </div>
