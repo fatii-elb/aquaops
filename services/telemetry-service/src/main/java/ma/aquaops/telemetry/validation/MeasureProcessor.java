@@ -43,6 +43,12 @@ public class MeasureProcessor {
         return true;
     }
 
+    /** Rejette un message illisible (JSON invalide) : journal et compteur. */
+    public void reject(String cause) {
+        rejected.incrementAndGet();
+        LOG.warn("Message rejeté : cause={}", cause);
+    }
+
     public long acceptedCount() {
         return accepted.get();
     }
