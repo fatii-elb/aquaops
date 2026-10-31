@@ -23,6 +23,10 @@ public class Intervention {
     /** Equipe affectee. Vide tant que l'intervention n'est pas affectee. */
     public String team;
 
+    /** Technicien assigne : son nom d'utilisateur Keycloak (preferred_username). Peut rester vide. */
+    @Column(name = "assigned_to")
+    public String assignedTo;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     public InterventionStatus status;
