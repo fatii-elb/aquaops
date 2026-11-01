@@ -1,5 +1,6 @@
 package ma.aquaops.notifications;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -15,7 +16,10 @@ public class AuditLog {
     private Long id;
 
     private String who;
+
+    @Column(name = "\"when\"")
     private Instant when;
+
     private String what;
 
     public AuditLog() {

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>AquaOps - Notifications</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f9; padding: 20px; }
+        h1 { color: #333; }
+        #notifications { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-height: 200px; }
+        .notif { border-bottom: 1px solid #eee; padding: 10px 0; color: #444; }
+        .notif:last-child { border-bottom: none; }
+        .status { font-size: 0.9em; color: #888; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>AquaOps - Notifications en temps réel</h1>
+    <div class="status" id="status">Connexion en cours...</div>
+    <div id="notifications"></div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const notifDiv = document.getElementById('notifications');
+
+        // On se connecte au flux SSE
+        const eventSource = new EventSource('/api/notifications/subscribe');
+
+        eventSource.onopen = function() {
+            statusDiv.textContent = "Connecté au flux de notifications.";
+            statusDiv.style.color = "green";
+        };
+
+        eventSource.onmessage = function(event) {
+            const p = document.createElement('div');
+            p.className = 'notif';
+            p.textContent = event.data;
+            
+            // Ajouter en haut de la liste
+            notifDiv.prepend(p);
+        };
+
+        eventSource.onerror = function() {
+            statusDiv.textContent = "Erreur de connexion. Tentative de reconnexion...";
+            statusDiv.style.color = "red";
+        };
+    </script>
+</body>
+</html>
