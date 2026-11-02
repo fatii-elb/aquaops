@@ -1,3 +1,4 @@
+
 server:
   port: ${DETECTION_PORT:8083}
 
@@ -19,6 +20,11 @@ detection:
     sensor-topic: ${DETECTION_SENSOR_TOPIC:sensor-readings}
     anomaly-topic: ${DETECTION_ANOMALY_TOPIC:anomaly-detected}
     consumer-group: ${DETECTION_CONSUMER_GROUP:detection-service}
+
+  leak:
+    min-pressure: ${LEAK_MIN_PRESSURE:2.0}
+    max-flow: ${LEAK_MAX_FLOW:40.0}
+    duration-seconds: ${LEAK_DURATION_SECONDS:10}
 
 management:
   endpoints:
