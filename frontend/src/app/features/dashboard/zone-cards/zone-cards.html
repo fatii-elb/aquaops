@@ -1,0 +1,36 @@
+<section aria-label="État des zones">
+  @if (error()) {
+    <p role="alert" class="mb-space-md rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">
+      Données indisponibles : nouvelle tentative dans quelques secondes.
+    </p>
+  }
+
+  @if (!loaded() && !error()) {
+    <p class="font-body-md text-body-md text-secondary">Chargement des zones…</p>
+  }
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-space-md">
+    @for (zone of zones(); track zone.id) {
+      <article class="flex flex-col gap-space-md rounded-xl border-l-4 bg-surface-container-lowest p-space-lg shadow-sm transition-shadow hover:shadow-md {{ cardClass(zone.state) }}" [attr.data-state]="zone.state">
+        <header class="flex items-start justify-between gap-space-sm">
+          <h3 class="font-label-md text-label-md font-bold text-on-surface">{{ zone.name }}</h3>
+          <span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 font-label-sm text-label-sm font-bold {{ badgeClass(zone.state) }}">
+            <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">{{ icon(zone.state) }}</span>
+            {{ label(zone.state) }}
+          </span>
+        </header>
+        <dl class="grid grid-cols-2 gap-x-space-md gap-y-1">
+          <dt class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Pression</dt>
+          <dd class="text-right font-mono-telemetry text-mono-telemetry font-bold text-on-surface">{{ value(zone.pressureBar, 'bar') }}</dd>
+          <dt class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Débit</dt>
+          <dd class="text-right font-mono-telemetry text-mono-telemetry font-bold text-on-surface">{{ value(zone.flowM3h, 'm³/h') }}</dd>
+          <dt class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Niveau</dt>
+          <dd class="text-right font-mono-telemetry text-mono-telemetry font-bold text-on-surface">{{ value(zone.levelM, 'm') }}</dd>
+          <dt class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Pompe</dt>
+          <dd class="text-right font-mono-telemetry text-mono-telemetry font-bold text-on-surface">{{ zone.pumpState === 'FAULT' ? 'En défaut' : zone.pumpState === 'NORMAL' ? 'Normale' : '—' }}</dd>
+        </dl>
+        <p class="font-label-sm text-label-sm text-secondary">Mis à jour à {{ time(zone.updatedAt) }}</p>
+      </article>
+    }
+  </div>
+</section>
