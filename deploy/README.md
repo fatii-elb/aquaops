@@ -12,7 +12,7 @@ Prérequis : Docker Desktop (ou Docker Engine avec le plugin `compose`).
 
 | Service | Port | Rôle |
 | --- | --- | --- |
-| `postgres` | 5432 | Bases `aquaops_assets`, `aquaops_telemetry`, `aquaops_incidents` |
+| `postgres` | 5432 | Bases `aquaops_assets`, `aquaops_incidents`, `aquaops_notifications`, `aquaops_telemetry` |
 | `kafka` | 9092 | Topics `sensor-readings`, `anomaly-detected`, `incident-events` (créés automatiquement) |
 | `keycloak` | 8180 | Connexion et rôles, realm `aquaops` importé au démarrage. Console : http://localhost:8180/admin |
 
@@ -30,7 +30,13 @@ cd deploy
 | `docker compose ps` | Liste les conteneurs et leur état. PostgreSQL affiche `healthy` quand il accepte les connexions. |
 | `docker compose logs -f` | Affiche les journaux et les suit en direct (`-f`). Ajouter un nom pour un seul service : `docker compose logs -f keycloak`. Ctrl+C pour quitter, les conteneurs continuent de tourner. |
 | `docker compose down` | Arrête et supprime les conteneurs. **Les données PostgreSQL sont gardées** dans le volume `pgdata`. |
-| `docker compose down -v` | Pareil, **et supprime le volume** (`-v`) : toutes les données PostgreSQL sont effacées. Au prochain `up -d`, les 3 bases sont recréées vides. |
+| `docker compose down -v` | Pareil, **et supprime le volume** (`-v`) : toutes les données PostgreSQL sont effacées. Au prochain `up -d`, les 4 bases sont recréées vides. |
+
+> **Avertissement : correction du 3 novembre 2026.** La base `aquaops_notifications`
+> manquait. Les scripts de `postgres-init/` ne s'exécutent que sur un volume vide :
+> si tu as lancé le compose avant cette correction, fais `docker compose down -v`
+> puis `docker compose up -d` pour que la nouvelle base soit créée. Attention,
+> `down -v` efface aussi les données des autres bases.
 
 ## Au quotidien : `stop`/`start` ou `down`/`up` ?
 
@@ -65,7 +71,8 @@ On doit voir les 3 conteneurs `aquaops-postgres`, `aquaops-kafka` et
 docker compose exec -T postgres psql -U aquaops -l | grep aquaops
 ```
 
-On doit voir les lignes `aquaops_assets`, `aquaops_telemetry` et `aquaops_incidents`.
+On doit voir les lignes `aquaops_assets`, `aquaops_incidents`, `aquaops_notifications`
+et `aquaops_telemetry`.
 D'autres bases (`aquaops`, `postgres`, `template0`, `template1`) apparaissent aussi,
 car leur propriétaire est le compte `aquaops` : c'est normal.
 
@@ -123,6 +130,11 @@ celles des `application.yml` des services. `docker compose up -d` marche tel que
   `aquaops`, puis *Users > Add user*, avec un mot de passe dans l'onglet
   *Credentials* et les rôles dans *Role mapping*.
 - **Keycloak perd ses utilisateurs après un `down`** : voir « Au quotidien » plus haut.
+- **Kafka perd ses topics après un `down`.** Il n'a pas de volume nommé : ses
+  topics et leurs messages sont stockés dans le conteneur, que `docker compose down`
+  supprime. Ce n'est pas grave en local, car les topics sont recréés
+  automatiquement à leur première utilisation. Mais c'est pourquoi
+  `kafka-topics.sh --list` est vide juste après un `down` puis `up -d`.
 - **Les bases ne sont créées qu'une fois.** `postgres-init/01-bases.sql` ne
   s'exécute que si le volume `pgdata` est vide. Après une modification de ce
   script, il faut `docker compose down -v` puis `docker compose up -d`.
