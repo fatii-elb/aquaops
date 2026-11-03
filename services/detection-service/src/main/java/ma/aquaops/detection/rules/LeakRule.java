@@ -15,11 +15,12 @@ import java.util.UUID;
 
 public class LeakRule implements Rule {
 
-    // Duree maximale entre les mesures de pression et de debit
+    // Duree maximale entre une mesure de pression et de debit
     private static final Duration MAX_READING_GAP =
             Duration.ofSeconds(30);
 
     private final PressureWindowTracker pressureTracker;
+    private final double minPressure;
     private final double maxFlow;
     private final Clock clock;
 
@@ -33,6 +34,13 @@ public class LeakRule implements Rule {
             new HashMap<>();
 
     private final Map<Integer, Instant> lastFlow =
+            new HashMap<>();
+
+    // Conserver la derniere valeur acceptee pour chaque zone
+    private final Map<Integer, Double> lastPressureValue =
+            new HashMap<>();
+
+    private final Map<Integer, Double> lastFlowValue =
             new HashMap<>();
 
     public LeakRule(
@@ -49,6 +57,7 @@ public class LeakRule implements Rule {
         this.pressureTracker = new PressureWindowTracker(
                 minPressure, pressureDuration);
 
+        this.minPressure = minPressure;
         this.maxFlow = maxFlow;
         this.clock = Objects.requireNonNull(clock);
     }
@@ -59,7 +68,7 @@ public class LeakRule implements Rule {
 
         String type = reading.type();
 
-        // Seules les mesures PRESSURE et FLOW nous interessent
+        // Seules les mesures PRESSURE et FLOW sont concernees
         if (!"PRESSURE".equals(type)
                 && !"FLOW".equals(type)) {
             return List.of();
@@ -69,27 +78,27 @@ public class LeakRule implements Rule {
         Instant time = reading.measuredAt();
         Double value = reading.value();
 
-        // Verification des donnees
+        // Validation des informations recues
         if (zone == null || time == null
                 || value == null
                 || !Double.isFinite(value)) {
             return List.of();
         }
 
-        // ETAPE 1 : Traitement de la pression
+        // ETAPE 1 : Verification de la pression
         if ("PRESSURE".equals(type)) {
 
             Instant previous = lastPressure.get(zone);
 
-            // Ignorer les anciennes mesures
+            // Ignorer les mesures anciennes ou dupliquees
             if (previous != null
                     && !time.isAfter(previous)) {
                 return List.of();
             }
 
             lastPressure.put(zone, time);
+            lastPressureValue.put(zone, value);
 
-            // Verification de la pression basse pendant N secondes
             boolean confirmed =
                     pressureTracker.update(reading);
 
@@ -97,22 +106,21 @@ public class LeakRule implements Rule {
 
         } else {
 
-            // ETAPE 2 : Traitement du debit
+            // ETAPE 2 : Verification du debit
             Instant previous = lastFlow.get(zone);
 
-            // Ignorer les anciennes mesures
             if (previous != null
                     && !time.isAfter(previous)) {
                 return List.of();
             }
 
             lastFlow.put(zone, time);
+            lastFlowValue.put(zone, value);
 
-            // Le debit depasse-t-il le seuil maximum ?
             highFlow.put(zone, value > maxFlow);
         }
 
-        // ETAPE 3 : Verification des deux conditions
+        // ETAPE 3 : Les deux conditions doivent etre vraies
         boolean pressureCondition =
                 lowPressure.getOrDefault(zone, false);
 
@@ -123,7 +131,7 @@ public class LeakRule implements Rule {
             return List.of();
         }
 
-        // ETAPE 4 : Verification de la fraicheur des mesures
+        // ETAPE 4 : Verifier la fraicheur des mesures
         Instant pressureTime = lastPressure.get(zone);
         Instant flowTime = lastFlow.get(zone);
 
@@ -135,12 +143,11 @@ public class LeakRule implements Rule {
                 pressureTime, flowTime
         ).abs();
 
-        // Si les mesures sont trop eloignees, pas d'anomalie
         if (gap.compareTo(MAX_READING_GAP) > 0) {
             return List.of();
         }
 
-        // ETAPE 5 : Creation de l'anomalie
+        // ETAPE 5 : Creer l'anomalie de fuite probable
         Anomaly anomaly = new Anomaly(
                 "1",
                 UUID.randomUUID().toString(),
@@ -152,5 +159,46 @@ public class LeakRule implements Rule {
         );
 
         return List.of(anomaly);
+    }
+
+    // ETAPE 6 : Confirmer le retour a la normale
+    public synchronized boolean confirmsRecovery(
+            SensorReading reading) {
+
+        if (reading == null
+                || reading.zoneId() == null
+                || reading.measuredAt() == null
+                || reading.value() == null
+                || !Double.isFinite(reading.value())) {
+            return false;
+        }
+
+        Integer zone = reading.zoneId();
+        Instant time = reading.measuredAt();
+        double value = reading.value();
+
+        // La pression est redevenue normale
+        if ("PRESSURE".equals(reading.type())) {
+
+            return value >= minPressure
+                    && time.equals(lastPressure.get(zone))
+                    && Objects.equals(
+                            value,
+                            lastPressureValue.get(zone)
+                    );
+        }
+
+        // Le debit est redevenu normal
+        if ("FLOW".equals(reading.type())) {
+
+            return value <= maxFlow
+                    && time.equals(lastFlow.get(zone))
+                    && Objects.equals(
+                            value,
+                            lastFlowValue.get(zone)
+                    );
+        }
+
+        return false;
     }
 }
