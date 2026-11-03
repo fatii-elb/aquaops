@@ -1,10 +1,11 @@
+import { ZoneCards } from './zone-cards/zone-cards';
 import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [RouterLink],
+  imports: [RouterLink, ZoneCards],
   templateUrl: './dashboard.html',
   host: { class: 'block' },
 })
