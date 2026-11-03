@@ -1,0 +1,145 @@
+# =============================================================================
+# AquaOps : infrastructure locale (PostgreSQL, Kafka, Keycloak)
+# Carte [TECH] deploiement · E5
+#
+# Une seule commande, lancee depuis le dossier deploy/ :
+#     docker compose up -d
+# Voir deploy/README.md pour les autres commandes.
+#
+# Seule l'infrastructure tourne dans Docker. Les services Java se lancent
+# toujours avec ./mvnw spring-boot:run et la trouvent sur localhost.
+# =============================================================================
+
+# Nom du projet. Sans lui, Docker prendrait le nom du dossier ("deploy").
+# Il sert de prefixe au volume (aquaops_pgdata). Les conteneurs, eux, ont
+# un nom fixe donne par container_name dans chaque service.
+name: aquaops
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL : la base de donnees de assets, telemetry et incidents.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18.6          # version fixee : tout le monde a la meme
+
+    # Nom fixe du conteneur. Sans lui, Docker l'appellerait "aquaops-postgres-1"
+    # et les commandes "docker exec aquaops-postgres ..." ne marcheraient pas.
+    container_name: aquaops-postgres
+
+    # Le compte administrateur cree au premier demarrage.
+    # ${DB_USER:-aquaops} veut dire : la variable DB_USER si elle existe,
+    # sinon "aquaops". Meme regle que ${...:...} dans les application.yml.
+    environment:
+      POSTGRES_USER: ${DB_USER:-aquaops}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-aquaops}
+
+    # "port de ta machine:port dans le conteneur".
+    # Les services Java se connectent donc a localhost:5432.
+    ports:
+      - "5432:5432"
+
+    volumes:
+      # Volume nomme : un espace disque gere par Docker, qui SURVIT a l'arret
+      # et a la suppression du conteneur. Sans lui, toutes les donnees seraient
+      # perdues a chaque "docker compose down".
+      # Attention : depuis PostgreSQL 18, on monte /var/lib/postgresql
+      # (et plus /var/lib/postgresql/data, qui fait echouer le demarrage).
+      - pgdata:/var/lib/postgresql
+
+      # Scripts SQL executes UNE SEULE FOIS, quand le volume pgdata est vide
+      # (tout premier demarrage). Ici : creation des 3 bases.
+      # ":ro" = lecture seule, le conteneur ne peut pas modifier nos fichiers.
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+
+    # Healthcheck : Docker lance cette commande a intervalles reguliers pour
+    # savoir si PostgreSQL accepte vraiment les connexions (pas seulement si le
+    # conteneur tourne). Le resultat s'affiche dans "docker compose ps" :
+    # "healthy" = pret, "starting" = encore en demarrage, "unhealthy" = probleme.
+    # $$ : le $ est transmis tel quel au conteneur, qui lit sa propre variable.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s       # tester toutes les 5 secondes
+      timeout: 5s        # un test qui dure plus de 5 s compte comme un echec
+      retries: 10        # "unhealthy" apres 10 echecs de suite
+
+    restart: unless-stopped   # redemarre seul apres un plantage ou un reboot
+
+  # ---------------------------------------------------------------------------
+  # Kafka : transporte les evenements entre services
+  # (sensor-readings, anomaly-detected, incident-events).
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:4.3.1
+    container_name: aquaops-kafka
+
+    ports:
+      - "9092:9092"
+
+    # Mode KRaft : Kafka gere lui-meme ses metadonnees, sans ZooKeeper.
+    # Ce seul conteneur joue les deux roles : broker (recoit les messages)
+    # et controller (coordonne le cluster).
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      # Deux "portes" d'entree :
+      #  - PLAINTEXT sur 9092 : pour les clients (nos services Java)
+      #  - CONTROLLER sur 9093 : usage interne du mode KRaft
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+
+      # L'adresse que Kafka donne aux clients pour le rejoindre.
+      # localhost:9092 convient aux services lances sur ta machine.
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+
+      # Un seul broker : chaque donnee n'existe qu'en un exemplaire.
+      # Sans ces reglages, Kafka en attendrait 3 et refuserait de travailler.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 1
+
+      # Un topic est cree automatiquement la premiere fois qu'un service
+      # ecrit ou lit dedans : pas besoin de les creer a la main.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Keycloak : connexion des utilisateurs et roles (realm "aquaops").
+  # ---------------------------------------------------------------------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.0
+    container_name: aquaops-keycloak
+
+    # start-dev        : mode developpement (HTTP, base interne, pas de certificat)
+    # --http-port=8180 : 8180 et pas 8080, deja pris par la gateway
+    # --import-realm   : au demarrage, Keycloak lit les fichiers .json du dossier
+    #                    /opt/keycloak/data/import et cree le realm "aquaops"
+    #                    (clients, roles). Si le realm existe deja, il est garde
+    #                    tel quel : rien n'est ecrase.
+    command: start-dev --http-port=8180 --import-realm
+
+    # Compte administrateur de la console (http://localhost:8180/admin),
+    # necessaire pour creer les utilisateurs de test a la main.
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+
+    ports:
+      - "8180:8180"
+
+    volumes:
+      # L'export du realm, versionne dans le depot, monte en lecture seule.
+      # Le chemin est relatif a ce fichier : ../docs/keycloak = docs/keycloak.
+      - ../docs/keycloak:/opt/keycloak/data/import:ro
+
+    restart: unless-stopped
+
+# Declaration des volumes nommes utilises plus haut.
+volumes:
+  pgdata:
