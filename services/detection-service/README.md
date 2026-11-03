@@ -1,10 +1,11 @@
 
 # AquaOps - Detection Service
 
-**Owner:** E3  
-**Project:** AquaOps - Water Distribution Monitoring System  
-**Technology:** Java 21, Spring Boot 4.1.1, Apache Kafka  
-**Sprints:** Sprint 2 and Sprint 3
+**Owner:** E3
+
+**Project:** AquaOps - Water Distribution Monitoring System
+
+**Technology:** Java 21, Spring Boot 4.1.1, Apache Kafka
 
 ## 1. Overview
 
