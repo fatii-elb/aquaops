@@ -1,0 +1,6 @@
+{
+  "/api/assets": { "target": "http://localhost:8082", "secure": false },
+  "/api/telemetry": { "target": "http://localhost:8081", "secure": false },
+  "/api/incidents": { "target": "http://localhost:8084", "secure": false },
+  "/api/notifications": { "target": "http://localhost:8085", "secure": false }
+}
