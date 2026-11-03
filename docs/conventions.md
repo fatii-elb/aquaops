@@ -57,6 +57,7 @@ Service folder names: lowercase, hyphens, ending in `-service`
 | Detection | 8083 |
 | Incidents | 8084 |
 | Notifications | 8085 |
+| Simulator | 8086 |
 | Keycloak | **8180** (its default 8080 clashes with the gateway) |
 | PostgreSQL | 5432 |
 | Kafka | 9092 |
@@ -73,6 +74,7 @@ Each service prefixes **all** its own paths with its name:
 | Detection | `/api/detection/**` | `/api/detection/rules` |
 | Incidents | `/api/incidents/**` | `/api/incidents/12` |
 | Notifications | `/api/notifications/**` | `/api/notifications/subscribe` |
+| Simulator | `/api/simulator/**` | `/api/simulator/scenarios` |
 
 Why: the gateway routes by the start of the path. Without the prefix, it cannot
 tell which service a request belongs to.

@@ -34,6 +34,11 @@ spring:
               predicates:
                 - Path=/api/notifications/**
 
+            - id: simulator
+              uri: ${SIMULATOR_URL:http://localhost:8086}
+              predicates:
+                - Path=/api/simulator/**
+
 management:
   endpoint:
     gateway:
