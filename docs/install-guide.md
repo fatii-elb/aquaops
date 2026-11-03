@@ -125,3 +125,18 @@ Tell E5 so it goes into this guide.
 | `Port 8080 already in use` | Keycloak or another service | Move Keycloak to 8180, or set the service's port variable |
 | `Connection refused` to the database | PostgreSQL not started | Start the PostgreSQL service |
 | Git asks for a password and fails | GitHub rejects passwords | Log in via the browser pop-up, or use a Personal Access Token |
+| Service looks stopped (window closed, Ctrl+C) but its port still answers; restarting fails with `Port 80xx was already in use` | `./mvnw spring-boot:run` starts a child Java process. Closing the shell or stopping mvnw does not always end it, especially on Windows | Find and stop the Java process holding the port, see below |
+
+**Stopping a leftover Java process (Windows)**
+
+In cmd or PowerShell, find the PID listening on the port (last column), then stop it:
+
+```bat
+netstat -ano | findstr :8086
+taskkill /PID <pid> /F
+```
+
+In Git Bash, write `taskkill //PID <pid> //F` (Git Bash turns a single `/PID`
+into a file path). You can also read the PID in the `Started ...Application`
+line of the startup log, e.g. `INFO 18512 --- [simulator] ... Started SimulatorApplication`
+→ PID `18512`.
