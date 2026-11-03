@@ -1,0 +1,6 @@
+type,pumpState,expected
+PUMP_STATE,FAULT,1
+PUMP_STATE,NORMAL,0
+PRESSURE,,0
+FLOW,,0
+LEVEL,,0
