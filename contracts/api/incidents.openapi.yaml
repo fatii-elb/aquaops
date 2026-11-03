@@ -165,7 +165,7 @@ components:
   schemas:
     IncidentStatus:
       type: string
-      enum: [OPEN, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED]
+      enum: [OPEN, CONFIRMED, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED]
       description: Mêmes valeurs que le champ status du contrat incident-events (liste à confirmer).
     IncidentPriority:
       type: string
