@@ -8,7 +8,7 @@ Règle de versionnement rédigée par E6 · version 0, à relire par l'équipe.
 |---|---|---|---|---|
 | `sensor-readings` | `sensor-readings.v1.json` | E1 (télémétrie) | E3 (détection), stockage télémétrie | brouillon v1 |
 | `anomaly-detected` | `anomaly-detected.v1.json` | E3 (détection) | E4 (incidents), E6 (notifications) | brouillon v1 |
-| `incident-events` | `incident-events.v1.json` | E4 (incidents) | E6 (notifications), audit | à venir |
+| `incident-events` | `incident-events.v1.json` | E4 (incidents) | E6 (notifications), audit | brouillon v1 |
 
 ## 2. Format commun
 
