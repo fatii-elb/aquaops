@@ -109,10 +109,20 @@ docker compose up -d
 docker compose ps
 ```
 
-This starts PostgreSQL, Kafka and Keycloak, creates the 4 service databases
-(`aquaops_assets`, `aquaops_incidents`, `aquaops_notifications`, `aquaops_telemetry`)
-and imports the `aquaops` realm. Wait until `docker compose ps` shows PostgreSQL
-as `(healthy)`.
+This starts PostgreSQL, Kafka and Keycloak, creates the service databases listed
+in `deploy/postgres-init/01-bases.sql` and imports the `aquaops` realm. Wait until
+`docker compose ps` shows PostgreSQL as `(healthy)`.
+
+> **Databases: 3 created today, 4 needed.** On `main`, the init script creates
+> `aquaops_assets`, `aquaops_incidents` and `aquaops_telemetry`. notifications-service
+> also needs `aquaops_notifications`: the fix that creates it is on the branch
+> `feature/TECH-deploy-compose`, **not merged yet**. Until then, notifications-service
+> cannot start with this setup (see [§6](#6-known-problems)). Check what your
+> PostgreSQL really holds:
+>
+> ```bash
+> docker compose exec -T postgres psql -U aquaops -l | grep aquaops
+> ```
 
 **No `.env` file is needed**: defaults match those of the services.
 Commands to stop, restart or reset, the checks, and the `.env` rules are all in
@@ -193,16 +203,34 @@ curl -s http://localhost:${GATEWAY_PORT:-8080}/api/simulator/scenarios
 
 Expected: the same JSON as when calling the simulator directly on 8086.
 
-> **Detection and incidents: two different errors, both expected for now.**
-> detection-service and incidents-service do not expose any controller yet.
-> Through the gateway, `/api/detection/...` and `/api/incidents/...` give:
->
-> - **`500`** if the target service is **not started**: the gateway cannot reach it.
-> - **`404`** if the service **is started**: it answers, but has no endpoint. Calling
->   it directly (`localhost:8083` or `8084`) gives the same `404`.
->
-> A `404` on both sides, through the gateway and directly, is the proof that
-> **the route is correct**: the request reached the service. It is not a gateway bug.
+Incidents through the gateway (incidents-service, PostgreSQL and Kafka must run):
+
+```bash
+curl -s http://localhost:${GATEWAY_PORT:-8080}/api/incidents
+```
+
+Expected: a JSON list, `[]` while no incident exists. incidents-service exposes
+`GET /api/incidents` (optional `status` and `zoneId` filters), `GET /api/incidents/{id}`,
+`POST /api/incidents` and `PUT /api/incidents/{id}`.
+
+> **Detection has no HTTP endpoint yet.** detection-service only reads and writes
+> Kafka topics, so `/api/detection/...` returns `404` even when it runs, both
+> through the gateway and directly on 8083. That is expected, not a gateway bug.
+
+#### When a call through the gateway fails
+
+Call the same path **directly** on the service's port, then compare:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:${GATEWAY_PORT:-8080}/api/incidents
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:${INCIDENTS_PORT:-8084}/api/incidents
+```
+
+| Gateway | Direct | Meaning |
+| --- | --- | --- |
+| Error (`5xx`) | No answer (`000`, connection refused) | The service is **not started**, or listens on another port. Start it and check its `/actuator/health`. In our tests the gateway answered `500` here, but do not rely on that exact code |
+| Same code as direct, e.g. `404` | Same code | The route is correct: the request reached the service. The problem is in the service (wrong path, no endpoint) |
+| Error | Works | The gateway forwards to the wrong address: check the `*_URL` variable of that route |
 
 Path prefixes and ports are fixed in [`docs/conventions.md`](conventions.md),
 sections 4 and 5.
@@ -271,9 +299,10 @@ For each user:
 | Git asks for a password and fails | GitHub rejects passwords | Log in via the browser pop-up, or use a Personal Access Token |
 | `Cannot connect to the Docker daemon`, or on Windows `error during connect ... dockerDesktopLinuxEngine` | Docker Desktop is not started | Start Docker Desktop, wait for *Engine running*, run the command again |
 | `Port 8080 was already in use` | Another program uses 8080 (Keycloak no longer does: it runs on 8180) | Stop that program (see below), or start the gateway on another port with `GATEWAY_PORT` |
-| A service is `DOWN`, or will not start. The **last** error shown by Spring is about Hibernate: `Unable to determine Dialect without JDBC metadata`, with no word about Docker or PostgreSQL | The infrastructure is not running. The real cause, `Connection to localhost:5432 refused`, is logged as a `WARN` a few lines **higher** | Scroll **up** in the log instead of reading only the last message. Then `cd deploy && docker compose ps`, and `docker compose up -d` |
-| notifications-service fails with `database "aquaops_notifications" does not exist` | Your PostgreSQL volume was created before this database was added to `deploy/postgres-init/` | `cd deploy && docker compose down -v && docker compose up -d` (erases local data, see the warning in [`deploy/README.md`](../deploy/README.md)) |
-| A call through the gateway to `/api/detection/...` or `/api/incidents/...` returns `500` or `404` | `500`: the service is not started. `404`: it is started but has no controller yet | Expected for now, see [§4](#the-gateway-single-entry-point) |
+| A service is `DOWN`, or will not start. The **last** error shown by Spring is about Hibernate: `Unable to determine Dialect without JDBC metadata`, with no word about Docker or PostgreSQL | The dialect error is only a **consequence**: Hibernate could not open a connection to PostgreSQL, so it could not read the database metadata. The real cause, e.g. `Connection to localhost:5432 refused`, is logged as a `WARN` a few lines **higher** | Scroll **up** in the log to the first connection error instead of reading only the last message. Then `cd deploy && docker compose ps`, and `docker compose up -d` if PostgreSQL is not `(healthy)` |
+| notifications-service fails with `database "aquaops_notifications" does not exist` | On `main`, `deploy/postgres-init/01-bases.sql` does not create this database yet. The fix is on `feature/TECH-deploy-compose`, not merged. Once it is, a volume created **before** the fix still lacks it: the init script only runs on an empty volume | Before the merge: nothing to do on your side, run the other services. After the merge: `cd deploy && docker compose down -v && docker compose up -d` (erases local data, see the warning in [`deploy/README.md`](../deploy/README.md)) |
+| A call through the gateway returns an error (`5xx`, often `500`) | The target service is not started, or the route's `*_URL` points to the wrong address | Call the same path directly on the service's port and compare, see [When a call through the gateway fails](#when-a-call-through-the-gateway-fails) |
+| `/api/detection/...` returns `404`, through the gateway and directly | detection-service has no HTTP endpoint yet: it only uses Kafka | Expected for now. The route itself is correct |
 | `password authentication failed for user "aquaops"` | A `.env` changed the database password on one side only | Read "Faut-il un fichier .env ?" in [`deploy/README.md`](../deploy/README.md): no `.env` is needed locally, and Compose reads `deploy/.env`, not the one at the root |
 | Service looks stopped (window closed, Ctrl+C) but its port still answers; restarting fails with `Port 80xx was already in use` | `./mvnw spring-boot:run` starts a child Java process. Closing the shell or stopping mvnw does not always end it, especially on Windows | Stop the Java process holding the port, see below |
 
