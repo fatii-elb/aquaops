@@ -31,7 +31,7 @@ class AnomalyToIncidentIT {
     IncidentRepository repository;
 
     private static String anomaly(String id, String type) {
-        return "{\"eventVersion\":1,\"anomalyId\":\"" + id + "\",\"type\":\"" + type + "\",\"zoneId\":3,"
+        return "{\"eventVersion\":\"1\",\"anomalyId\":\"" + id + "\",\"type\":\"" + type + "\",\"zoneId\":3,"
                 + "\"measuredAt\":\"" + java.time.Instant.now() + "\",\"detectedAt\":\"" + java.time.Instant.now() + "\"}";
     }
 

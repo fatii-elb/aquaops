@@ -1,5 +1,5 @@
 {
-  "eventVersion": 1,
+  "eventVersion": "1",
   "anomalyId": "fixture-leak-0001",
   "type": "LEAK_SUSPECTED",
   "zoneId": 3,
