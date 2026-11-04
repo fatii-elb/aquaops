@@ -1,0 +1,11 @@
+{
+  "eventVersion": 1,
+  "anomalyId": "fixture-leak-0001",
+  "type": "LEAK_SUSPECTED",
+  "zoneId": 3,
+  "sensorId": "pressure-zone-3",
+  "severity": "CRITICAL",
+  "measuredAt": "2026-11-03T09:00:00Z",
+  "detectedAt": "2026-11-03T09:00:01Z",
+  "details": { "note": "champ supplementaire ignore par le consommateur" }
+}
