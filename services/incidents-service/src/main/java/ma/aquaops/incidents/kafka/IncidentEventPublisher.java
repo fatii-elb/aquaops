@@ -18,7 +18,7 @@ public class IncidentEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(IncidentEventPublisher.class);
     public static final String TOPIC = "incident-events";
     public static final String CREATED = "INCIDENT_CREATED";
-    static final int EVENT_VERSION = 1;
+    static final String EVENT_VERSION = "1";
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
     private final KafkaTemplate<String, String> kafka;
