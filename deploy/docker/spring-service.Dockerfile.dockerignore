@@ -1,0 +1,51 @@
+# =============================================================================
+# Build-context filter for spring-service.Dockerfile (Card [TECH] deployment, E5)
+#
+# Docker (BuildKit) applies this file to every build that uses
+# deploy/docker/spring-service.Dockerfile, whatever the service folder given as
+# build context. No .dockerignore is needed inside the service folders.
+#
+# The Dockerfile only copies mvnw, pom.xml, .mvn/ and src/. This file stops
+# everything else from even being sent to Docker: secrets, build output, and
+# files that only slow the build down.
+# Never add mvnw, pom.xml, .mvn or src here: the build needs them.
+# =============================================================================
+
+# Secrets and local settings
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Build output (the image builds its own jar)
+target/
+**/target/
+
+# Git metadata
+.git/
+**/.git/
+.gitignore
+.gitattributes
+
+# IDE and project files
+.idea/
+**/.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+
+# OS-generated files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+**/Thumbs.db
+desktop.ini
+**/desktop.ini
+
+# Local logs
+*.log
+**/*.log
+logs/
