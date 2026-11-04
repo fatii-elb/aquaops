@@ -23,6 +23,14 @@ public class IncidentEventsConsumer {
     public void handle(String message) {
         try {
             var node = jsonMapper.readTree(message);
+            
+            // 1. Vérification de la version du contrat
+            var eventVersion = node.path("eventVersion").asString("");
+            if (!"1".equals(eventVersion)) {
+                System.out.println("Version d'événement inconnue ignorée : " + eventVersion);
+                return; // On ignore le message
+            }
+
             var eventType = node.path("eventType").asString("");
             var incidentId = node.path("incidentId").asInt(0);
             var zoneId = node.path("zoneId").asInt(0);
@@ -35,12 +43,12 @@ public class IncidentEventsConsumer {
                 occurredAt = Instant.now();
             }
 
-            // 1. Notification
+            // 2. Notification
             String notification = "Événement: " + eventType + " - Incident " + incidentId + " (Zone " + zoneId + ")";
             notificationController.sendNotification(notification);
             System.out.println("Notification envoyée: " + notification);
 
-            // 2. Audit
+            // 3. Audit
             String what = eventType + " sur l'incident " + incidentId + " (zone " + zoneId + ")";
             AuditLog auditLog = new AuditLog("system", occurredAt, what);
             auditLogRepository.save(auditLog);
