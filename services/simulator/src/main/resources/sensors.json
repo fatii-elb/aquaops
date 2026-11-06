@@ -1,0 +1,9 @@
+[
+  { "sensorId": 1, "zoneId": 1, "type": "PRESSURE" },
+  { "sensorId": 2, "zoneId": 1, "type": "FLOW" },
+  { "sensorId": 3, "zoneId": 1, "type": "LEVEL" },
+  { "sensorId": 4, "zoneId": 1, "type": "PUMP_STATE" },
+  { "sensorId": 5, "zoneId": 2, "type": "PRESSURE" },
+  { "sensorId": 6, "zoneId": 2, "type": "FLOW" },
+  { "sensorId": 7, "zoneId": 2, "type": "PUMP_STATE" }
+]
