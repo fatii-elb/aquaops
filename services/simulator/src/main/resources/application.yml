@@ -3,6 +3,14 @@ server:
 spring:
   application:
     name: simulator
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+simulator:
+  sensors-file: ${SENSORS_FILE:classpath:sensors.json}
+  interval-ms: ${SIM_INTERVAL_MS:1000}
 management:
   endpoints:
     web:
