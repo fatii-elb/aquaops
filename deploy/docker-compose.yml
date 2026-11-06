@@ -107,7 +107,33 @@ services:
       # ecrit ou lit dedans : pas besoin de les creer a la main.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
 
+    # Kafka est "healthy" quand il repond vraiment aux commandes.
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
     restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # kafka-init : cree les 3 topics au demarrage, puis s'arrete.
+  # ---------------------------------------------------------------------------
+  kafka-init:
+    image: apache/kafka:4.3.1
+    container_name: aquaops-kafka-init
+    network_mode: "service:kafka"   # partage le reseau de Kafka : localhost = Kafka
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for t in sensor-readings anomaly-detected incident-events; do
+          /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic "$$t" \
+            --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
+        done
+    restart: "no"
 
   # ---------------------------------------------------------------------------
   # Keycloak : connexion des utilisateurs et roles (realm "aquaops").

@@ -13,7 +13,8 @@ Prérequis : Docker Desktop (ou Docker Engine avec le plugin `compose`).
 | Service | Port | Rôle |
 | --- | --- | --- |
 | `postgres` | 5432 | Bases `aquaops_assets`, `aquaops_incidents`, `aquaops_notifications`, `aquaops_telemetry` |
-| `kafka` | 9092 | Topics `sensor-readings`, `anomaly-detected`, `incident-events` (créés automatiquement) |
+| `kafka` | 9092 | Topics `sensor-readings`, `anomaly-detected`, `incident-events` (créés automatiquement au démarrage) |
+| `kafka-init` | - | Crée les 3 topics au démarrage, puis s'arrête (état `Exited (0)`, c'est normal) |
 | `keycloak` | 8180 | Connexion et rôles, realm `aquaops` importé au démarrage. Console : http://localhost:8180/admin |
 
 ## Commandes
@@ -26,8 +27,8 @@ cd deploy
 
 | Commande | Ce qu'elle fait |
 | --- | --- |
-| `docker compose up -d` | Télécharge les images si besoin, crée et démarre les 3 conteneurs en arrière-plan (`-d`). |
-| `docker compose ps` | Liste les conteneurs et leur état. PostgreSQL affiche `healthy` quand il accepte les connexions. |
+| `docker compose up -d` | Télécharge les images si besoin, crée et démarre PostgreSQL, Kafka et Keycloak en arrière-plan (`-d`). Un conteneur `kafka-init` crée ensuite les 3 topics, puis s'arrête. |
+| `docker compose ps` | Liste les conteneurs en cours. PostgreSQL et Kafka affichent `healthy` quand ils sont prêts. Ajouter `-a` pour voir aussi `kafka-init`, arrêté. |
 | `docker compose logs -f` | Affiche les journaux et les suit en direct (`-f`). Ajouter un nom pour un seul service : `docker compose logs -f keycloak`. Ctrl+C pour quitter, les conteneurs continuent de tourner. |
 | `docker compose down` | Arrête et supprime les conteneurs. **Les données PostgreSQL sont gardées** dans le volume `pgdata`. |
 | `docker compose down -v` | Pareil, **et supprime le volume** (`-v`) : toutes les données PostgreSQL sont effacées. Au prochain `up -d`, les 4 bases sont recréées vides. |
@@ -61,11 +62,12 @@ modification de `docker-compose.yml` ou de `postgres-init/`.
 Commandes testées sous Git Bash, depuis le dossier `deploy/` :
 
 ```bash
-docker compose ps
+docker compose ps -a
 ```
 
-On doit voir les 3 conteneurs `aquaops-postgres`, `aquaops-kafka` et
-`aquaops-keycloak` à l'état `Up`, avec `(healthy)` pour PostgreSQL.
+On doit voir `aquaops-postgres`, `aquaops-kafka` et `aquaops-keycloak` à l'état
+`Up`, avec `(healthy)` pour PostgreSQL et Kafka. Le conteneur `aquaops-kafka-init`
+est à l'état `Exited (0)` : c'est normal, il a créé les topics puis s'est arrêté.
 
 ```bash
 docker compose exec -T postgres psql -U aquaops -l | grep aquaops
@@ -88,17 +90,10 @@ On doit voir un JSON qui commence par `{"issuer":"http://localhost:8180/realms/a
 MSYS_NO_PATHCONV=1 docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092
 ```
 
-On doit voir la liste des topics, un par ligne. **Elle est vide tant qu'aucun
-service n'a utilisé Kafka** : les topics sont créés automatiquement au premier
-message envoyé ou lu. Pour les créer à la main sans attendre :
-
-```bash
-for t in sensor-readings anomaly-detected incident-events; do
-  MSYS_NO_PATHCONV=1 docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh \
-    --create --if-not-exists --topic "$t" --partitions 1 --replication-factor 1 \
-    --bootstrap-server localhost:9092
-done
-```
+On doit voir les 3 topics, un par ligne : `anomaly-detected`, `incident-events`
+et `sensor-readings`. Ils sont créés automatiquement au démarrage par le conteneur
+`kafka-init` : si la liste est incomplète juste après `up -d`, attendre une dizaine
+de secondes et relancer la commande.
 
 `MSYS_NO_PATHCONV=1` est nécessaire sous Git Bash : sans lui, Git Bash traduit
 `/opt/kafka/...` en chemin Windows (`C:/Program Files/Git/opt/kafka/...`) et la
@@ -130,11 +125,10 @@ celles des `application.yml` des services. `docker compose up -d` marche tel que
   `aquaops`, puis *Users > Add user*, avec un mot de passe dans l'onglet
   *Credentials* et les rôles dans *Role mapping*.
 - **Keycloak perd ses utilisateurs après un `down`** : voir « Au quotidien » plus haut.
-- **Kafka perd ses topics après un `down`.** Il n'a pas de volume nommé : ses
+- **Kafka perd ses messages après un `down`.** Il n'a pas de volume nommé : ses
   topics et leurs messages sont stockés dans le conteneur, que `docker compose down`
-  supprime. Ce n'est pas grave en local, car les topics sont recréés
-  automatiquement à leur première utilisation. Mais c'est pourquoi
-  `kafka-topics.sh --list` est vide juste après un `down` puis `up -d`.
+  supprime. Ce n'est pas grave en local : les 3 topics sont recréés
+  automatiquement par `kafka-init` au prochain `up -d`.
 - **Les bases ne sont créées qu'une fois.** `postgres-init/01-bases.sql` ne
   s'exécute que si le volume `pgdata` est vide. Après une modification de ce
   script, il faut `docker compose down -v` puis `docker compose up -d`.
