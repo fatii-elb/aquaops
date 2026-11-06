@@ -33,6 +33,7 @@ public class SimulatorPublisher {
     private final Clock clock;
     private final JsonMapper json = JsonMapper.builder().build();
     private final List<Sensor> capteurs;
+    private volatile boolean pause;
 
     public SimulatorPublisher(KafkaTemplate<String, String> kafka,
                               ScenarioRegistry scenarios,
@@ -48,6 +49,9 @@ public class SimulatorPublisher {
 
     @Scheduled(fixedRateString = "${simulator.interval-ms}")
     public void publier() {
+        if (pause) {
+            return; // test de charge en cours : le générateur de charge publie à ma place
+        }
         for (Sensor s : capteurs) {
             Sample mesure = scenarios.mesure(s.type());
             if (!mesure.emit()) {
@@ -55,6 +59,14 @@ public class SimulatorPublisher {
             }
             kafka.send(TOPIC, String.valueOf(s.sensorId()), enJson(s, mesure));
         }
+    }
+
+    void setPause(boolean pause) {
+        this.pause = pause;
+    }
+
+    List<Sensor> capteurs() {
+        return capteurs;
     }
 
     String enJson(Sensor s, Sample mesure) {
