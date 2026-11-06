@@ -61,6 +61,33 @@ curl -X POST http://localhost:8086/api/simulator/scenarios/pompe/start
 curl -X POST http://localhost:8086/api/simulator/scenarios/stop
 ```
 
+## Mode charge (NFR-01)
+
+Le mode charge envoie un débit soutenu de mesures dans `sensor-readings` et compte
+les messages confirmés par Kafka. Le simulateur doit tourner. Pendant le test, le
+simulateur normal est en pause.
+
+```bash
+# Démarrer 500 mesures/s pendant 300 s (valeurs par défaut)
+curl -i -X POST "http://localhost:8086/api/simulator/load/start?rate=500&seconds=300"
+
+# Lire l'état et les compteurs
+curl -i http://localhost:8086/api/simulator/load
+
+# Arrêter avant la fin
+curl -i -X POST http://localhost:8086/api/simulator/load/stop
+```
+
+Le statut renvoie `attempted` (envois tentés), `acked` (confirmés par Kafka),
+`failed` (en échec), `startedAt` et `endedAt`. Le nombre de mesures à comparer
+avec la base est `acked`.
+
+Remarques :
+- Le test refuse de démarrer si un scénario de panne est actif (réponse 409) : appeler
+  d'abord `POST /api/simulator/scenarios/stop`.
+- Les mesures sont réparties sur les 7 capteurs de `sensors.json`.
+- Après la fin du test, le simulateur normal reprend (7 mesures/s).
+
 ## Tests
 
 ```bash
@@ -68,3 +95,5 @@ curl -X POST http://localhost:8086/api/simulator/scenarios/stop
 ```
 
 Le test `SimulatorPublisherKafkaTests` démarre un Kafka de test en mémoire (EmbeddedKafka) : ni Docker ni Kafka local ne sont nécessaires pour les tests.
+
+Le test `LoadGeneratorKafkaTests` vérifie que le compteur du mode charge est exact : le nombre de messages confirmés (`acked`) est égal au nombre de messages réellement ajoutés dans le topic.
