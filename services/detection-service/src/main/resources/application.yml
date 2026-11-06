@@ -26,6 +26,10 @@ detection:
     max-flow: ${LEAK_MAX_FLOW:40.0}
     duration-seconds: ${LEAK_DURATION_SECONDS:10}
 
+  silence:
+  threshold-seconds: ${SILENCE_THRESHOLD_SECONDS:10}
+  check-interval-ms: ${SILENCE_CHECK_INTERVAL_MS:1000}
+  
 management:
   endpoints:
     web:

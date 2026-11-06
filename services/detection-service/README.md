@@ -1,7 +1,7 @@
 
 # AquaOps - Detection Service
 
-**Owner:** E3
+**Owner:** E3 (silent sensor detection: E1)
 
 **Project:** AquaOps - Water Distribution Monitoring System
 
@@ -22,6 +22,7 @@ The service currently supports:
 - Pump fault detection (SCRUM-33 / FR-11)
 - Probable leak detection (SCRUM-31 / FR-09)
 - Anomaly deduplication and recovery (SCRUM-36 / FR-14)
+- Silent sensor detection (SCRUM-32 / FR-10)
 
 The anomalies are published to Kafka for consumption by
 downstream services, including the Incident Service (E4).
@@ -38,24 +39,26 @@ Data processing flow:
           v
     SensorReadingListener
           |
-          v
-    DetectionEngine
-          |
-          +--------------------+
-          |                    |
-          v                    v
-    PumpFaultRule           LeakRule
-                                 |
-                                 v
+          +-----------------------------+
+          |                             |
+          v                             v
+    DetectionEngine               SilenceDetector
+          |                       (scheduled check)
+          +--------------------+        |
+          |                    |        |
+          v                    v        |
+    PumpFaultRule           LeakRule    |
+                                 |      |
+                                 v      |
                          PressureWindowTracker
-          |                    |
-          +--------------------+
-          |
-          v
-    AnomalyDeduplicator
-          |
-          v
-    AnomalyPublisher
+          |                    |        |
+          +--------------------+        |
+          |                             |
+          v                             |
+    AnomalyDeduplicator                 |
+          |                             |
+          v                             v
+    AnomalyPublisher <------------------+
           |
           v
     Kafka: anomaly-detected
@@ -71,8 +74,10 @@ Data processing flow:
 - PressureWindowTracker: tracks low pressure over time.
 - LeakRule: detects probable leaks.
 - AnomalyDeduplicator: suppresses repeated anomalies.
+- SilenceDetector: detects sensors that stopped sending readings.
 - AnomalyPublisher: publishes anomalies to Kafka.
 - DetectionConfig: configures the Spring beans and rules.
+- SchedulingConfig: enables Spring scheduling for the silence check.
 
 ## 3. SCRUM-33 - Pump Fault Detection (FR-11)
 
@@ -358,6 +363,57 @@ Expected result:
 This scenario has been successfully tested using
 EmbeddedKafka.
 
+## 5b. SCRUM-32 - Silent Sensor Detection (FR-10)
+
+### Objective
+
+Detect sensors that stopped sending readings.
+
+### Detection rule
+
+A sensor is considered silent when no reading has been received
+from it for `SILENCE_THRESHOLD_SECONDS` seconds (default 10).
+The service publishes one `SENSOR_SILENT` anomaly per silence period.
+If the sensor sends a reading again, it is no longer silent and a new
+silence can be detected later.
+
+### Implementation
+
+- `SilenceDetector` keeps the last reception time per sensor and checks
+  every `SILENCE_CHECK_INTERVAL_MS` milliseconds (default 1000).
+- It is called by `SensorReadingListener` for every reading, so the
+  service uses a single Kafka listener.
+- Time comes from an injected `Clock`, so tests use a simulated clock.
+  The silence delay is counted from the reception time, not from the
+  `measuredAt` field of the reading.
+- The anomaly appears between T and T + 1 s after the last reading,
+  within the required tolerance of T ± 2 s.
+- `measuredAt` is the `measuredAt` of the last reading received from
+  the sensor; `detectedAt` is the detection time.
+- Anomalies are published directly with `AnomalyPublisher`.
+
+### Tests
+
+- SilenceDetectorTest: 5 tests with a simulated clock (no anomaly before
+  the threshold, anomaly at the threshold, no duplicate, recovery,
+  independent sensors).
+- SilenceKafkaIntegrationTest: EmbeddedKafka test checking that the
+  anomaly is published between T and T + 2 s.
+
+### Limits
+
+- Only sensors that sent at least one reading since the service started
+  are monitored. A sensor that never sent anything is not detected.
+- State is in memory and is lost on restart.
+- Silent-sensor anomalies bypass `AnomalyDeduplicator` (keyed by zone and
+  type), so several silent sensors in one zone each produce an anomaly.
+- The Incident Service consumes `anomaly-detected`: a `SENSOR_SILENT`
+  anomaly can create an incident. Stopping the simulator while the
+  detection service is running therefore produces incidents.
+- For `SENSOR_SILENT`, `measuredAt` is not the measurement that
+  triggered the anomaly. It should be excluded from end-to-end latency
+  calculations (NFR-02).
+
 ## 6. Kafka Integration
 
 ### Input topic
@@ -384,6 +440,7 @@ Implemented anomaly types:
 
 - PUMP_FAULT
 - LEAK_SUSPECTED
+- SENSOR_SILENT
 
 The event contract also defines other anomaly types
 that are not implemented by the current detection rules.
@@ -415,6 +472,8 @@ Configuration file:
 | LEAK_MIN_PRESSURE | 2.0 |
 | LEAK_MAX_FLOW | 40.0 |
 | LEAK_DURATION_SECONDS | 10 |
+| SILENCE_THRESHOLD_SECONDS | 10 |
+| SILENCE_CHECK_INTERVAL_MS | 1000 |
 
 Configuration values can be overridden without
 modifying the Java source code.
@@ -478,14 +537,18 @@ From services/detection-service:
 
 ### Latest validated result
 
-Date: November 3, 2026
+Date: November 6, 2026
 
-    Tests run: 39
+    Tests run: 45
     Failures: 0
     Errors: 0
     Skipped: 0
 
     BUILD SUCCESS
+
+The message "Surefire is going to kill self fork JVM" may appear
+after the tests when EmbeddedKafka takes a long time to stop. It
+does not indicate a test failure.
 
 ### Validation coverage
 
@@ -501,6 +564,7 @@ The test suite includes:
 - Anomaly deduplication tests
 - Recovery tests
 - Out-of-order pump reading tests
+- Silent sensor tests (simulated clock and tolerance)
 - Kafka integration tests
 
 ### EmbeddedKafka
@@ -578,6 +642,9 @@ If a zone contains multiple independent pumps,
 the state model and keys may need to include
 individual equipment identifiers.
 
+Silent sensor detection is the exception: it keeps its own
+state per sensor (see section 5b).
+
 ### Temporal assumptions
 
 The pressure window is based on accepted sensor
@@ -599,6 +666,11 @@ The default leak thresholds are testing values.
 
 They require validation with AquaOps domain data
 before operational deployment.
+
+### Silent sensors
+
+See the limits listed in section 5b: sensors that never sent a
+reading are not monitored, and the state is lost on restart.
 
 ## 12. Development Summary
 
@@ -629,9 +701,17 @@ SCRUM-36 / FR-14:
 - Validated the 100-reading deduplication scenario
   with EmbeddedKafka.
 
+SCRUM-32 / FR-10 (E1):
+
+- Implemented the silent sensor scheduler with an injected Clock.
+- Published SENSOR_SILENT anomalies through the existing publisher.
+- Added simulated-clock tests and a Kafka tolerance test (T ± 2 s).
+
 ## 13. Project Ownership
 
 Detection Service: E3
+
+Silent sensor detection (SilenceDetector): E1
 
 Main responsibilities:
 
