@@ -41,7 +41,7 @@ Brouillon v1 d'E4, produit par incidents-service, lu par notifications-service. 
 | Service | Préfixe | Documentation OpenAPI |
 |---|---|---|
 | notifications-service | `/api/notifications/**` | `contracts/api/notifications.openapi.yaml`, générée par le service (page Swagger : `/api/notifications/swagger-ui.html`) |
-| assets-service | `/api/assets/**` | à fournir par E2 |
+| assets-service | `/api/assets/**` | journal d'audit : `contracts/api/assets-audit.openapi.yaml` (E2) ; le reste : à fournir par E2 |
 | incidents-service | `/api/incidents/**` | `contracts/api/incidents.openapi.yaml` (brouillon d'E4, dans `main`) |
 | telemetry-service | `/api/telemetry/**` | à fournir par E1 |
 | detection-service | `/api/detection/**` | à fournir par E3 |

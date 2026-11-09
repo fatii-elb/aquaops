@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
+import ma.aquaops.assets.audit.AuditService;
 import ma.aquaops.assets.model.Intervention;
 import ma.aquaops.assets.model.InterventionStatus;
 import ma.aquaops.assets.repository.InterventionRepository;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -19,8 +21,11 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/assets/interventions")
 public class InterventionController {
     private final InterventionRepository repo;
+    private final AuditService audit;
 
-    public InterventionController(InterventionRepository repo) { this.repo = repo; }
+    public InterventionController(InterventionRepository repo, AuditService audit) {
+        this.repo = repo; this.audit = audit;
+    }
 
     /** Corps de la requete d'affectation : equipe obligatoire, technicien facultatif. */
     public record AssignRequest(@NotBlank String team, String assignedTo) {}
@@ -42,24 +47,31 @@ public class InterventionController {
     /** Cree une intervention Planifiee, liee a un incident, sans equipe ni technicien. */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
     public Intervention create(@Valid @RequestBody Intervention x) {
         x.id = null;
         x.team = null;
         x.assignedTo = null;
         x.status = InterventionStatus.PLANNED;
         x.createdAt = Instant.now();
-        return repo.save(x);
+        Intervention saved = repo.save(x);
+        audit.record("CREATE", "INTERVENTION", saved.id, "incident " + saved.incidentId);
+        return saved;
     }
 
     /** Affecte (ou reaffecte) l'intervention a une equipe et, si fourni, a un technicien. */
     @PutMapping("/{id}/assign")
+    @Transactional
     public Intervention assign(@PathVariable Long id, @Valid @RequestBody AssignRequest r) {
         Intervention i = one(id);
         if (i.status == InterventionStatus.DONE)
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Intervention deja terminee");
         i.team = r.team().trim();
         i.assignedTo = (r.assignedTo() == null || r.assignedTo().isBlank()) ? null : r.assignedTo().trim();
-        return repo.save(i);
+        Intervention saved = repo.save(i);
+        audit.record("ASSIGN", "INTERVENTION", id,
+            "equipe " + saved.team + (saved.assignedTo == null ? "" : ", technicien " + saved.assignedTo));
+        return saved;
     }
 
     /**
@@ -67,6 +79,7 @@ public class InterventionController {
      * administrateur peut le faire (sinon 403). Transition invalide : 409.
      */
     @PutMapping("/{id}/status")
+    @Transactional
     public Intervention changeStatus(@PathVariable Long id, @Valid @RequestBody StatusRequest r,
                                      Authentication auth) {
         Intervention i = one(id);
@@ -76,8 +89,11 @@ public class InterventionController {
         if (!i.status.canMoveTo(r.status()))
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "Transition interdite : " + i.status + " -> " + r.status());
+        InterventionStatus before = i.status;
         i.status = r.status();
-        return repo.save(i);
+        Intervention saved = repo.save(i);
+        audit.record("STATUS_CHANGE", "INTERVENTION", id, before + " -> " + saved.status);
+        return saved;
     }
 
     private boolean canChangeStatus(Authentication auth, Intervention i) {

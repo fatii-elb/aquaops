@@ -2,10 +2,12 @@ package ma.aquaops.assets.web;
 
 import jakarta.validation.Valid;
 import java.util.List;
+import ma.aquaops.assets.audit.AuditService;
 import ma.aquaops.assets.model.Pump;
 import ma.aquaops.assets.repository.PumpRepository;
 import ma.aquaops.assets.repository.ZoneRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -14,9 +16,10 @@ import org.springframework.web.server.ResponseStatusException;
 public class PumpController {
     private final PumpRepository repo;
     private final ZoneRepository zones;
+    private final AuditService audit;
 
-    public PumpController(PumpRepository repo, ZoneRepository zones) {
-        this.repo = repo; this.zones = zones;
+    public PumpController(PumpRepository repo, ZoneRepository zones, AuditService audit) {
+        this.repo = repo; this.zones = zones; this.audit = audit;
     }
 
     private void checkZone(Long zoneId) {
@@ -35,16 +38,29 @@ public class PumpController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Transactional
     public Pump create(@Valid @RequestBody Pump x) {
-        checkZone(x.zoneId); x.id = null; return repo.save(x);
+        checkZone(x.zoneId); x.id = null;
+        Pump saved = repo.save(x);
+        audit.record("CREATE", "PUMP", saved.id, "nom : " + saved.name + ", zone " + saved.zoneId);
+        return saved;
     }
 
     @PutMapping("/{id}")
+    @Transactional
     public Pump update(@PathVariable Long id, @Valid @RequestBody Pump x) {
-        one(id); checkZone(x.zoneId); x.id = id; return repo.save(x);
+        one(id); checkZone(x.zoneId); x.id = id;
+        Pump saved = repo.save(x);
+        audit.record("UPDATE", "PUMP", id, "nom : " + saved.name + ", zone " + saved.zoneId);
+        return saved;
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable Long id) { one(id); repo.deleteById(id); }
+    @Transactional
+    public void delete(@PathVariable Long id) {
+        Pump old = one(id);
+        repo.deleteById(id);
+        audit.record("DELETE", "PUMP", id, "nom : " + old.name + ", zone " + old.zoneId);
+    }
 }

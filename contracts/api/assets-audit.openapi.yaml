@@ -1,0 +1,84 @@
+openapi: 3.0.3
+info:
+  title: AquaOps assets-service - journal d'audit
+  version: "1"
+  description: |
+    SCRUM-46, FR-24. Qui a fait quoi et quand. Lecture seule, aucune ecriture par l'API :
+    les lignes sont ajoutees par assets-service (actions sur les actifs et les interventions)
+    et par son consommateur du topic incident-events (changements d'incident).
+    Reserve aux roles superviseur et administrateur (403 sinon, 401 sans jeton).
+    Les dates sont en ISO 8601, UTC.
+servers:
+  - url: /api/assets
+paths:
+  /audit:
+    get:
+      summary: Rechercher dans le journal d'audit
+      description: Les plus recentes d'abord. Tous les filtres sont facultatifs et se combinent.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: actor, in: query, schema: { type: string }, description: "Utilisateur : contient, sans tenir compte de la casse." }
+        - { name: action, in: query, schema: { type: string }, description: "Type d'action exact (CREATE, UPDATE, DELETE, ASSIGN, STATUS_CHANGE, INCIDENT_CREATED...). Voir /audit/actions." }
+        - { name: entityType, in: query, schema: { type: string }, description: "Objet touche exact (ZONE, PIPE, TANK, PUMP, SENSOR, INTERVENTION, INCIDENT)." }
+        - { name: from, in: query, schema: { type: string, format: date-time }, description: "Depuis cet instant, inclus." }
+        - { name: to, in: query, schema: { type: string, format: date-time }, description: "Jusqu'a cet instant, inclus." }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 20 } }
+      responses:
+        "200":
+          description: Une page du journal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditPage" }
+        "400": { description: "page ou size hors limites, ou from apres to" }
+        "401": { description: Jeton absent ou invalide }
+        "403": { description: Role insuffisant (seuls superviseur et administrateur) }
+  /audit/actions:
+    get:
+      summary: Types d'action presents dans le journal
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Liste triee, sans doublon
+          content:
+            application/json:
+              schema: { type: array, items: { type: string } }
+              example: ["ASSIGN", "CREATE", "DELETE", "INCIDENT_CONFIRMED", "STATUS_CHANGE", "UPDATE"]
+        "401": { description: Jeton absent ou invalide }
+        "403": { description: Role insuffisant }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    AuditEntry:
+      type: object
+      required: [id, occurredAt, actor, action, entityType, source]
+      properties:
+        id: { type: integer, format: int64 }
+        occurredAt: { type: string, format: date-time, description: Quand }
+        actor: { type: string, description: "Qui : nom d'utilisateur Keycloak, ou 'system' si inconnu" }
+        actorRole: { type: string, nullable: true, description: "administrateur, superviseur, technicien ou operateur (vide pour les evenements Kafka)" }
+        action: { type: string, description: Quoi }
+        entityType: { type: string }
+        entityId: { type: string, nullable: true }
+        details: { type: string, nullable: true }
+        source: { type: string, enum: [assets-service, incident-events] }
+      example:
+        id: 128
+        occurredAt: "2026-12-02T10:15:30Z"
+        actor: test-admin
+        actorRole: administrateur
+        action: CREATE
+        entityType: ZONE
+        entityId: "7"
+        details: "nom : Zone Nord"
+        source: assets-service
+    AuditPage:
+      type: object
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+        page: { type: integer, description: "Numero de page, a partir de 0" }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
