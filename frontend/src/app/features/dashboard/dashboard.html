@@ -86,6 +86,14 @@
             <span class="font-body-md text-body-md">Administration</span>
           </div>
         </a>
+        @if (canSeeAudit) {
+          <a routerLink="/audit" class="flex items-center justify-between px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors">
+            <div class="flex items-center gap-space-md">
+              <span class="material-symbols-outlined text-[20px]">history</span>
+              <span class="font-body-md text-body-md">Journal d'audit</span>
+            </div>
+          </a>
+        }
       </nav>
     </div>
 

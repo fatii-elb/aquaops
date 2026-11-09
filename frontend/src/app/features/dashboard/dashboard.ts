@@ -12,6 +12,9 @@ import { AuthService } from '../../core/auth.service';
 export class Dashboard implements OnDestroy {
   private auth = inject(AuthService);
 
+  // Le journal d'audit est reserve aux superviseurs et administrateurs (FR-24).
+  canSeeAudit = this.auth.hasAnyRole(['superviseur', 'administrateur']);
+
   // Nom de l'utilisateur connecté (lu dans le jeton Keycloak).
   userName = this.auth.username || 'GouloJK';
 
