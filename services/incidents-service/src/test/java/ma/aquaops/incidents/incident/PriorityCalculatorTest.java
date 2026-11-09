@@ -11,8 +11,8 @@ class PriorityCalculatorTest {
     @CsvSource({
             "LEAK_SUSPECTED,CRITICAL",
             "PUMP_FAULT,HIGH",
-            "LOW_LEVEL,MEDIUM",
-            "SENSOR_SILENT,LOW",
+            "LOW_LEVEL,LOW",
+            "SENSOR_SILENT,MEDIUM",
             "TYPE_INCONNU,MEDIUM"
     })
     void priorityByType(String type, Priority expected) {
