@@ -26,6 +26,11 @@
     "assignedTo": { "type": "string", "description": "Nom d'utilisateur du technicien assigne, s'il y en a un." },
     "actor": { "type": "string", "description": "Nom d'utilisateur a l'origine de l'action (audit, FR-24), s'il est connu." },
     "measuredAt": { "type": "string", "format": "date-time", "description": "Mesure a l'origine de l'anomalie (reprise de anomaly-detected), pour calculer la latence de bout en bout (NFR-02)." },
+    "detectedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optionnel. Horodatage de la détection de l'anomalie d'origine, repris de anomaly-detected."
+    },
     "occurredAt": { "type": "string", "format": "date-time", "description": "Horodatage de l'evenement, UTC, ISO 8601." }
   },
   "examples": [
@@ -38,6 +43,7 @@
       "status": "OPEN",
       "priority": "CRITICAL",
       "measuredAt": "2026-10-12T21:30:00Z",
+      "detectedAt": "2026-10-12T21:30:04Z",
       "occurredAt": "2026-10-12T21:30:05Z"
     },
     {
