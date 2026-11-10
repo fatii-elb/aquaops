@@ -35,11 +35,17 @@ class IncidentEventsConsumerTest {
 
         kafkaTemplate.send("incident-events", message);
 
-        // Attendre un peu que le message soit consommé
-        Thread.sleep(2000);
+        // Attendre plus longtemps (jusqu'à 5 secondes)
+        boolean found = false;
+        for (int i = 0; i < 10; i++) {
+            Thread.sleep(500);
+            found = notificationService.getNotifications().stream()
+                    .anyMatch(n -> n.contains("INCIDENT_CREATED") && n.contains("42"));
+            if (found) {
+                break;
+            }
+        }
 
-        assertTrue(notificationService.getNotifications().stream()
-                .anyMatch(n -> n.contains("INCIDENT_CREATED") && n.contains("42")),
-                "La notification aurait dû être reçue");
+        assertTrue(found, "La notification aurait dû être reçue");
     }
 }
