@@ -1,15 +1,21 @@
 package ma.aquaops.notifications;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.time.Duration;
 
-@SpringBootTest
+import static org.awaitility.Awaitility.await;
+
+@SpringBootTest(properties = "spring.kafka.consumer.auto-offset-reset=earliest")
 @EmbeddedKafka(partitions = 1, topics = "incident-events", bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 @DirtiesContext
 class AuditLogTest {
@@ -20,8 +26,18 @@ class AuditLogTest {
     @Autowired
     private AuditLogRepository auditLogRepository;
 
+    @Autowired
+    private KafkaListenerEndpointRegistry registry;
+
+    @BeforeEach
+    void waitForConsumer() {
+        for (MessageListenerContainer container : registry.getListenerContainers()) {
+            ContainerTestUtils.waitForAssignment(container, 1);
+        }
+    }
+
     @Test
-    void testAuditLogSaved() throws Exception {
+    void testAuditLogSaved() {
         String message = """
                 {
                   "eventVersion": "1",
@@ -35,17 +51,9 @@ class AuditLogTest {
 
         kafkaTemplate.send("incident-events", message);
 
-        // Attendre plus longtemps (jusqu'à 10 secondes)
-        boolean found = false;
-        for (int i = 0; i < 20; i++) {
-            Thread.sleep(500);
-            found = auditLogRepository.findAll().stream()
-                    .anyMatch(a -> a.getWhat().contains("99") && a.getWhat().contains("INCIDENT_CREATED"));
-            if (found) {
-                break;
-            }
-        }
-
-        assertTrue(found, "L'audit aurait dû être enregistré en base");
+        await().atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> auditLogRepository.findAll().stream()
+                        .anyMatch(a -> a.getWhat().contains("99") && a.getWhat().contains("INCIDENT_CREATED")));
     }
 }
