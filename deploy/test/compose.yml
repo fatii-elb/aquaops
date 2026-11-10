@@ -1,0 +1,128 @@
+# =============================================================================
+# AquaOps: TEST environment, the 7 Java services from pre-built images.
+# Card SCRUM-55 / NFR-08 · E5
+#
+# Images come from the registry, tagged with the commit SHA built and tested
+# by the "Images" workflow. Nothing is built here: no build: section, no
+# implicit "latest". Compose refuses to start if IMAGE_TAG is missing.
+#
+# Infrastructure (PostgreSQL, Kafka, Keycloak) is NOT in this file: where it
+# runs on the VM is not decided yet. Two ways to start, from the repo root:
+#
+#   1. Infrastructure in Docker on the same VM (adds compose.infra.yml):
+#        docker compose -f deploy/test/compose.yml -f deploy/test/compose.infra.yml up -d
+#   2. Infrastructure already running elsewhere (addresses in .env):
+#        docker compose -f deploy/test/compose.yml up -d
+#
+# Variables: deploy/test/.env (git-ignored), see deploy/test/.env.example.
+# TEST ONLY. A production environment needs its own project, values and
+# Keycloak setup (no start-dev): nothing here is meant for production.
+#
+# Published on the host: the gateway only, on 127.0.0.1 unless GATEWAY_BIND
+# says otherwise. The services are reachable only inside the "backend" network.
+# Health: each image has a HEALTHCHECK (deploy/docker/spring-service.Dockerfile)
+# that reads HEALTHCHECK_PORT, set below to the port the service listens on.
+# =============================================================================
+
+name: aquaops-test
+
+# Settings shared by the 7 Java services (YAML anchors).
+x-java-service: &java-service
+  restart: unless-stopped
+  networks: [backend]
+  # The JVM sizes its heap from this limit (MaxRAMPercentage=75 in the image).
+  mem_limit: ${JAVA_MEM_LIMIT:-768m}
+  # The services run as a non-root user and need no Linux capability.
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  # Bounded logs: a test VM must not fill its disk with container logs.
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+x-db-credentials: &db-credentials
+  DB_USER: ${DB_USER:?DB_USER is required, see deploy/test/.env.example}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required, see deploy/test/.env.example}
+
+services:
+
+  telemetry:
+    <<: *java-service
+    image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/telemetry:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
+    environment:
+      <<: *db-credentials
+      HEALTHCHECK_PORT: "8081"
+      TELEMETRY_DB_URL: jdbc:postgresql://${DB_HOST:?DB_HOST is required}:${DB_PORT:-5432}/aquaops_telemetry
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+
+  assets:
+    <<: *java-service
+    image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/assets:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
+    environment:
+      <<: *db-credentials
+      HEALTHCHECK_PORT: "8082"
+      ASSETS_DB_URL: jdbc:postgresql://${DB_HOST:?DB_HOST is required}:${DB_PORT:-5432}/aquaops_assets
+      # Must equal the "iss" claim of the tokens: depends on the URL users
+      # reach Keycloak with on the VM (to agree with E2).
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:?KEYCLOAK_ISSUER_URI is required}
+
+  detection:
+    <<: *java-service
+    image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/detection:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
+    environment:
+      HEALTHCHECK_PORT: "8083"
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+
+  incidents:
+    <<: *java-service
+    image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/incidents:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
+    environment:
+      <<: *db-credentials
+      HEALTHCHECK_PORT: "8084"
+      INCIDENTS_DB_URL: jdbc:postgresql://${DB_HOST:?DB_HOST is required}:${DB_PORT:-5432}/aquaops_incidents
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+
+  notifications:
+    <<: *java-service
+    image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/notifications:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
+    environment:
+      <<: *db-credentials
+      HEALTHCHECK_PORT: "8085"
+      NOTIFICATIONS_DB_URL: jdbc:postgresql://${DB_HOST:?DB_HOST is required}:${DB_PORT:-5432}/aquaops_notifications
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+      # application.properties logs every SQL statement: too verbose here.
+      SPRING_JPA_SHOW_SQL: "false"
+
+  simulator:
+    <<: *java-service
+    image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/simulator:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
+    environment:
+      HEALTHCHECK_PORT: "8086"
+      # The simulator publishes sensor-readings: without this it would try
+      # localhost:9092, i.e. its own container.
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+
+  gateway:
+    <<: *java-service
+    image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/gateway:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
+    # The single entry point. 127.0.0.1 by default: opening it to the network
+    # (GATEWAY_BIND=0.0.0.0) is a decision for the VM administrator.
+    ports:
+      - "${GATEWAY_BIND:-127.0.0.1}:${GATEWAY_HOST_PORT:-8080}:8080"
+    environment:
+      HEALTHCHECK_PORT: "8080"
+      # Service names on the backend network, not host addresses.
+      TELEMETRY_URL: http://telemetry:8081
+      ASSETS_URL: http://assets:8082
+      DETECTION_URL: http://detection:8083
+      INCIDENTS_URL: http://incidents:8084
+      NOTIFICATIONS_URL: http://notifications:8085
+      SIMULATOR_URL: http://simulator:8086
+      # application.yml also exposes /actuator/gateway (the route list). The
+      # gateway is the published service: expose health only.
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health
+    # No depends_on: routes are resolved per request, so the gateway starts
+    # even if one backend is down (that backend then answers 5xx).
+
+networks:
+  backend:
