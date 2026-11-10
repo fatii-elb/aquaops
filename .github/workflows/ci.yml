@@ -1,5 +1,7 @@
 # =============================================================================
 # AquaOps CI: build and test every pull request to main.
+# Also reusable: another workflow can run these exact jobs on its own commit
+# with  jobs.<id>.uses: ./.github/workflows/ci.yml
 # Card SCRUM-55 / NFR-08 · E5
 #
 # What runs:
@@ -20,14 +22,22 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
 
-# A new push to the same pull request cancels the run still in progress.
+# Pull request: a new push to the same PR cancels the run still in progress.
+# Any other event (e.g. called by a workflow on push to main): one group per
+# commit, never cancelled, so two commits on main do not cancel each other.
+# When called, github.workflow is the CALLER's name: direct and called runs
+# never share a group. A caller must not use a group starting with "ci-tests-".
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: >-
+    ci-tests-${{ github.workflow }}-${{ github.event_name == 'pull_request'
+    && format('pr-{0}', github.event.pull_request.number)
+    || format('{0}-{1}', github.event_name, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
 
