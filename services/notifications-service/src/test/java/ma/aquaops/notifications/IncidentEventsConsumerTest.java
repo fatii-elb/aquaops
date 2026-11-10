@@ -9,7 +9,10 @@ import org.springframework.test.annotation.DirtiesContext;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest
+// earliest pour CE test seulement : le consommateur lit le message meme s'il a ete
+// publie avant l'attribution de sa partition. Sans danger ici : @EmbeddedKafka et
+// @DirtiesContext donnent un broker neuf, le topic ne contient que ce message.
+@SpringBootTest(properties = "spring.kafka.consumer.auto-offset-reset=earliest")
 @EmbeddedKafka(partitions = 1, topics = "incident-events", bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 @DirtiesContext
 class IncidentEventsConsumerTest {
@@ -35,11 +38,18 @@ class IncidentEventsConsumerTest {
 
         kafkaTemplate.send("incident-events", message);
 
-        // Attendre un peu que le message soit consommé
-        Thread.sleep(2000);
+        // Attendre la notification, 15 s au plus : rejoindre le groupe Kafka
+        // peut prendre plusieurs secondes sur une machine lente (CI).
+        long limite = System.currentTimeMillis() + 15_000;
+        while (!notificationRecue() && System.currentTimeMillis() < limite) {
+            Thread.sleep(100);
+        }
 
-        assertTrue(notificationService.getNotifications().stream()
-                .anyMatch(n -> n.contains("INCIDENT_CREATED") && n.contains("42")),
-                "La notification aurait dû être reçue");
+        assertTrue(notificationRecue(), "La notification aurait dû être reçue");
+    }
+
+    private boolean notificationRecue() {
+        return notificationService.getNotifications().stream()
+                .anyMatch(n -> n.contains("INCIDENT_CREATED") && n.contains("42"));
     }
 }
