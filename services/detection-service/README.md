@@ -724,3 +724,18 @@ Main responsibilities:
 The service is part of the AquaOps microservices
 architecture and is intended to be integrated
 through the team's GitHub Pull Request workflow.
+
+
+
+## Image Docker
+
+Construction (depuis la racine du dépôt) :
+
+    docker build -f deploy/docker/spring-service.Dockerfile -t aquaops/detection-service:dev services/detection-service
+
+Lancement (HEALTHCHECK_PORT = port du service ; KAFKA_BOOTSTRAP_SERVERS = adresse Kafka) :
+
+    docker run -d -p 8083:8083 -e HEALTHCHECK_PORT=8083 \
+      -e KAFKA_BOOTSTRAP_SERVERS=<adresse-kafka> aquaops/detection-service:dev
+
+Santé : `curl http://localhost:8083/actuator/health`
