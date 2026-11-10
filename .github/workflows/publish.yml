@@ -94,7 +94,13 @@ jobs:
       - name: Summary
         env:
           TAG: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
-        run: echo "| \`$TAG\` | built, not pushed |" >> "$GITHUB_STEP_SUMMARY"
+        # A Markdown table needs its header row, or GitHub shows raw pipes.
+        run: |
+          {
+            echo "| Image | Result |"
+            echo "| --- | --- |"
+            echo "| \`$TAG\` | built, not pushed |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # Single status for the whole pipeline (the future deploy will need it).
