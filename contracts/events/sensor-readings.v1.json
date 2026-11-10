@@ -14,7 +14,12 @@
     "value": { "type": "number", "description": "Valeur mesurée. Obligatoire sauf pour PUMP_STATE." },
     "unit": { "type": "string", "description": "Unité, par exemple bar, m3/h, m." },
     "pumpState": { "enum": ["NORMAL", "FAULT"], "description": "Seulement pour PUMP_STATE (FR-11)." },
-    "measuredAt": { "type": "string", "format": "date-time", "description": "Horodatage de la mesure, UTC, ISO 8601." }
+    "measuredAt": { "type": "string", "format": "date-time", "description": "Horodatage de la mesure, UTC, ISO 8601." },
+    "publishedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optionnel. Instant où le producteur publie la mesure sur Kafka, UTC (NFR-02)."
+    }
   },
   "allOf": [
     {
@@ -24,7 +29,7 @@
     }
   ],
   "examples": [
-    { "eventVersion": "1", "sensorId": 12, "zoneId": 3, "type": "PRESSURE", "value": 2.4, "unit": "bar", "measuredAt": "2026-10-12T21:30:00Z" },
+    { "eventVersion": "1", "sensorId": 12, "zoneId": 3, "type": "PRESSURE", "value": 2.4, "unit": "bar", "measuredAt": "2026-10-12T21:30:00Z", "publishedAt": "2026-10-12T21:30:01Z" },
     { "eventVersion": "1", "sensorId": 15, "zoneId": 3, "type": "PUMP_STATE", "pumpState": "FAULT", "measuredAt": "2026-10-12T21:30:01Z" }
   ]
 }
