@@ -1,0 +1,212 @@
+# =============================================================================
+# AquaOps CI: build and test every pull request to main.
+# Card SCRUM-55 / NFR-08 · E5
+#
+# What runs:
+#   java           services without a database (embedded Kafka at most)
+#   java-postgres  services that need PostgreSQL: each job gets its own
+#                  throwaway PostgreSQL 18 container, deleted with the job
+#   frontend       Angular: npm ci, unit tests (Vitest), production build
+#   ci-result      single status to require in branch protection later
+#
+# Safety: GitHub-hosted runners only, read-only token, no secrets, nothing is
+# deployed or pushed. The database password below exists only inside the
+# job's temporary container: it is not a secret and is never used elsewhere.
+# Actions are pinned to a commit SHA; the comment gives the release tag.
+# =============================================================================
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push to the same pull request cancels the run still in progress.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Java services without a database. Kafka tests use @EmbeddedKafka (in the
+  # JVM): no broker needed.
+  # ---------------------------------------------------------------------------
+  java:
+    name: Java ${{ matrix.service }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false            # one failing service does not hide the others
+      matrix:
+        service: [detection-service, gateway, simulator]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78  # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/${{ matrix.service }}/pom.xml
+
+      # "sh ./mvnw": mvnw is stored without the executable bit (mode 644),
+      # same convention as deploy/docker/spring-service.Dockerfile.
+      # verify = compile, all tests (*Test, *Tests), JaCoCo report, jar.
+      - name: Build and test
+        working-directory: services/${{ matrix.service }}
+        run: sh ./mvnw -B -ntp verify
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: reports-${{ matrix.service }}
+          path: |
+            services/${{ matrix.service }}/target/surefire-reports/
+            services/${{ matrix.service }}/target/site/jacoco/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Java services that need PostgreSQL (Spring context, JPA, MockMvc tests).
+  # Each service reads its own *_DB_URL variable: all point to the job's
+  # private database. The name ends in "_it": the incidents integration tests
+  # only install their test trigger in a database named like that.
+  # ---------------------------------------------------------------------------
+  java-postgres:
+    name: Java ${{ matrix.service }} (PostgreSQL)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: assets-service
+          - service: telemetry-service
+          - service: notifications-service
+          - service: incidents-service
+            # PostgreSQL only: Kafka listeners off, publisher mocked (see each
+            # class). AnomalyToIncidentIT is left out: it needs a real broker.
+            it-tests: IncidentHistoryRepositoryIT,IncidentServiceHistoryIT,IncidentFr16WorkflowIT
+    services:
+      postgres:
+        image: postgres:18.6       # same version as deploy/
+        env:
+          POSTGRES_USER: aquaops_ci
+          POSTGRES_PASSWORD: ci-throwaway-only
+          POSTGRES_DB: aquaops_ci_it
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aquaops_ci -d aquaops_ci_it"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DB_USER: aquaops_ci
+      DB_PASSWORD: ci-throwaway-only
+      ASSETS_DB_URL: jdbc:postgresql://localhost:5432/aquaops_ci_it
+      TELEMETRY_DB_URL: jdbc:postgresql://localhost:5432/aquaops_ci_it
+      INCIDENTS_DB_URL: jdbc:postgresql://localhost:5432/aquaops_ci_it
+      NOTIFICATIONS_DB_URL: jdbc:postgresql://localhost:5432/aquaops_ci_it
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78  # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/${{ matrix.service }}/pom.xml
+
+      - name: Build and test
+        working-directory: services/${{ matrix.service }}
+        run: sh ./mvnw -B -ntp verify
+
+      # Maven's default test patterns never pick up *IT classes: they are run
+      # here by name. A missing class fails the step (no silent skip).
+      - name: Integration tests (PostgreSQL)
+        if: matrix.it-tests != ''
+        working-directory: services/${{ matrix.service }}
+        env:
+          AQUAOPS_IT: '1'
+          IT_TESTS: ${{ matrix.it-tests }}
+        run: sh ./mvnw -B -ntp test -Dtest="$IT_TESTS"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: reports-${{ matrix.service }}
+          path: |
+            services/${{ matrix.service }}/target/surefire-reports/
+            services/${{ matrix.service }}/target/site/jacoco/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Angular frontend. Node 22 LTS: Angular 21 needs ^20.19 || ^22.12 || >=24,
+  # and package.json pins npm 10.9.3, the npm shipped with Node 22.
+  # Tests run with Vitest + jsdom: no browser to install.
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Angular frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NG_CLI_ANALYTICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (exact lockfile)
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test -- --watch=false
+
+      - name: Production build
+        run: npm run build -- --configuration production
+
+  # ---------------------------------------------------------------------------
+  # One stable check name for branch protection, whatever the matrix contains.
+  # Fails if any job above failed, was cancelled or was skipped.
+  # ---------------------------------------------------------------------------
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [java, java-postgres, frontend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check job results
+        env:
+          JAVA: ${{ needs.java.result }}
+          JAVA_POSTGRES: ${{ needs.java-postgres.result }}
+          FRONTEND: ${{ needs.frontend.result }}
+        run: |
+          echo "java=$JAVA java-postgres=$JAVA_POSTGRES frontend=$FRONTEND"
+          for r in "$JAVA" "$JAVA_POSTGRES" "$FRONTEND"; do
+            if [ "$r" != "success" ]; then
+              echo "::error::At least one CI job did not succeed"
+              exit 1
+            fi
+          done
