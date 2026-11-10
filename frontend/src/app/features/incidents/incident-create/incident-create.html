@@ -1,0 +1,52 @@
+<div class="fixed inset-0 z-[70] flex items-center justify-center bg-on-surface/40 p-space-lg" role="dialog" aria-modal="true" aria-labelledby="create-title">
+  <form class="flex w-full max-w-lg flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-2xl" (submit)="$event.preventDefault(); submit()">
+    <h2 id="create-title" class="font-headline-md text-headline-md font-bold text-on-surface">Déclarer un incident manuel</h2>
+
+    <div class="flex flex-col gap-space-xs">
+      <label for="new-zone" class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Zone</label>
+      @if (zones().length > 0) {
+        <select #z id="new-zone" class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-primary" (change)="zoneId.set(+z.value)">
+          <option value="0">Choisir une zone…</option>
+          @for (zone of zones(); track zone.id) {
+            <option [value]="zone.id">{{ zone.name }}</option>
+          }
+        </select>
+      } @else {
+        <input #zi id="new-zone" type="number" min="1" placeholder="Numéro de la zone" class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-primary" (input)="zoneId.set(+zi.value)" />
+      }
+    </div>
+
+    <div class="grid grid-cols-2 gap-space-md">
+      <div class="flex flex-col gap-space-xs">
+        <label for="new-type" class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Type</label>
+        <select #t id="new-type" class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-primary" (change)="type.set(t.value)">
+          @for (item of types; track item) {
+            <option [value]="item">{{ typeLabel(item) }}</option>
+          }
+        </select>
+      </div>
+      <div class="flex flex-col gap-space-xs">
+        <label for="new-priority" class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Priorité</label>
+        <select #p id="new-priority" class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-primary" (change)="priority.set($any(p.value))">
+          @for (item of priorities; track item) {
+            <option [value]="item" [selected]="item === 'MEDIUM'">{{ priorityLabel(item) }}</option>
+          }
+        </select>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-space-xs">
+      <label for="new-description" class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Description</label>
+      <textarea #d id="new-description" rows="3" class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-primary" (input)="description.set(d.value)"></textarea>
+    </div>
+
+    @if (error()) {
+      <p role="alert" class="rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">{{ error() }}</p>
+    }
+
+    <div class="flex justify-end gap-space-sm pt-space-xs">
+      <button type="button" data-testid="cancel-create" (click)="cancelled.emit()" class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface hover:bg-surface-container-highest">Annuler</button>
+      <button type="submit" data-testid="submit-create" [disabled]="busy()" class="rounded-lg bg-primary px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-primary shadow-sm hover:brightness-110 disabled:opacity-50">Déclarer</button>
+    </div>
+  </form>
+</div>

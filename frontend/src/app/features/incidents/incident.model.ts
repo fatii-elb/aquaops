@@ -39,3 +39,17 @@ export interface UpdateIncidentBody {
   assignee: string | null;
   actor: string | null;
 }
+
+/** Corps de POST /api/incidents (incident déclaré manuellement). */
+export interface CreateIncidentBody {
+  zoneId: number;
+  type: string;
+  priority: Priority;
+  description: string | null;
+  actor: string | null;
+}
+
+export interface ZoneInfo {
+  id: number;
+  name: string;
+}

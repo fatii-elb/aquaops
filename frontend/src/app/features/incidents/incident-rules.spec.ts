@@ -1,4 +1,4 @@
-import { ALL_STATUSES, formatDateTime, nextStatuses, priorityLabel, sortIncidents, statusLabel, typeLabel } from './incident-rules';
+import { ALL_STATUSES, STAGES, delaySeconds, formatDateTime, incidentCode, nextStatuses, priorityLabel, sortIncidents, statusLabel, timeAgo, typeLabel } from './incident-rules';
 import { Incident, IncidentStatus } from './incident.model';
 
 const incident = (over: Partial<Incident>): Incident => ({
@@ -71,5 +71,34 @@ describe('incident-rules', () => {
   it('chaque statut atteignable est un vrai statut', () => {
     const all = new Set<IncidentStatus>(ALL_STATUSES);
     ALL_STATUSES.forEach((s) => nextStatuses(s).forEach((t) => expect(all.has(t)).toBe(true)));
+  });
+
+  it('le code de l\'incident reprend l\'année et l\'identifiant sur 3 chiffres', () => {
+    expect(incidentCode({ id: 89, createdAt: '2026-11-09T10:00:00Z' })).toBe('INC-2026-089');
+    expect(incidentCode({ id: 1234, createdAt: '2026-11-09T10:00:00Z' })).toBe('INC-2026-1234');
+    expect(incidentCode({ id: 5, createdAt: 'nope' })).toBe('INC------005');
+  });
+
+  it('libellés de la maquette : Affecté et Élevée', () => {
+    expect(statusLabel('ASSIGNED')).toBe('Affecté');
+    expect(priorityLabel('HIGH')).toBe('Élevée');
+  });
+
+  it('la barre de pipeline suit les six étapes dans l\'ordre', () => {
+    expect(STAGES.map((s) => s.status)).toEqual(ALL_STATUSES);
+  });
+
+  it('timeAgo : minutes, heures, jours', () => {
+    const now = new Date('2026-11-09T12:00:00Z').getTime();
+    expect(timeAgo('2026-11-09T11:59:40Z', now)).toBe("à l'instant");
+    expect(timeAgo('2026-11-09T11:38:00Z', now)).toBe('il y a 22 min');
+    expect(timeAgo('2026-11-09T10:15:00Z', now)).toBe('il y a 1 h 45 min');
+    expect(timeAgo('2026-11-06T12:00:00Z', now)).toBe('il y a 3 j');
+    expect(timeAgo(null, now)).toBe('—');
+  });
+
+  it('delaySeconds : écart entre la mesure et la création', () => {
+    expect(delaySeconds('2026-11-09T10:00:00Z', '2026-11-09T10:00:05Z')).toBe(5);
+    expect(delaySeconds(null, '2026-11-09T10:00:05Z')).toBeNull();
   });
 });

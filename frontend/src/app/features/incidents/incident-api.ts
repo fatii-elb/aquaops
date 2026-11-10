@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { HistoryEntry, Incident, IncidentStatus, UpdateIncidentBody } from './incident.model';
+import { CreateIncidentBody, HistoryEntry, Incident, IncidentStatus, UpdateIncidentBody } from './incident.model';
 
 /** Appels vers le service des incidents, toujours via la passerelle (chemins relatifs /api/incidents). */
 @Injectable({ providedIn: 'root' })
@@ -25,6 +25,11 @@ export class IncidentApi {
   /** Confirmer, assigner, changer l'état ou clore : le serveur vérifie la transition. */
   update(id: number, body: UpdateIncidentBody): Observable<Incident> {
     return this.http.put<Incident>(`${this.base}/${id}`, body);
+  }
+
+  /** Déclarer un incident à la main. */
+  create(body: CreateIncidentBody): Observable<Incident> {
+    return this.http.post<Incident>(this.base, body);
   }
 
   addComment(id: number, text: string, author: string): Observable<HistoryEntry> {

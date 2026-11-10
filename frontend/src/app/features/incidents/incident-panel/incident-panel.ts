@@ -1,13 +1,14 @@
-import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { AuthService } from '../../../core/auth.service';
 import { NotificationStream } from '../../../core/notification-stream';
-import { NotificationToasts } from '../../notifications/notification-toasts';
 import { IncidentApi, errorMessage } from '../incident-api';
 import {
   actionLabel,
   buttonLabel,
+  delaySeconds,
   formatDateTime,
+  formatTime,
+  incidentCode,
   isClosed,
   nextStatuses,
   priorityClass,
@@ -17,87 +18,103 @@ import {
   typeLabel,
 } from '../incident-rules';
 import { HistoryEntry, Incident, IncidentStatus } from '../incident.model';
+import { ZoneNames } from '../zone-names';
 
-/** Détail d'un incident : informations, boutons confirmer / assigner / clore, historique et commentaires. */
+/** Panneau de droite : l'incident choisi, ses actions, sa chronologie et son journal de bord. */
 @Component({
-  selector: 'app-incident-detail',
-  imports: [RouterLink, NotificationToasts],
-  templateUrl: './incident-detail.html',
-  host: { class: 'block' },
+  selector: 'app-incident-panel',
+  templateUrl: './incident-panel.html',
+  host: { class: 'flex flex-col gap-space-lg' },
 })
-export class IncidentDetail implements OnInit {
+export class IncidentPanel {
   private api = inject(IncidentApi);
   private auth = inject(AuthService);
   private stream = inject(NotificationStream);
-  private route = inject(ActivatedRoute);
+  protected zones = inject(ZoneNames);
+
+  readonly incidentId = input.required<number>();
+  /** Émis après une action réussie, pour que la liste se mette à jour. */
+  readonly changed = output<void>();
 
   protected readonly incident = signal<Incident | null>(null);
   protected readonly history = signal<HistoryEntry[]>([]);
-  protected readonly loaded = signal(false);
   protected readonly notFound = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly assignee = signal('');
   protected readonly commentText = signal('');
 
-  /** Les états que l'on peut atteindre depuis l'état actuel : un bouton par état. */
-  protected readonly next = computed(() => {
+  private readonly next = computed(() => {
     const current = this.incident();
     return current ? nextStatuses(current.status) : [];
   });
+  /** Étapes suivantes (confirmer, démarrer, résoudre) : boutons principaux. */
+  protected readonly forward = computed(() => this.next().filter((s) => s !== 'ASSIGNED' && s !== 'CLOSED'));
+  protected readonly canAssign = computed(() => this.next().includes('ASSIGNED'));
+  protected readonly canClose = computed(() => this.next().includes('CLOSED'));
+  protected readonly finished = computed(() => this.next().length === 0);
   protected readonly canComment = computed(() => {
     const current = this.incident();
     return current !== null && !isClosed(current.status);
   });
-
-  private id = 0;
-  private lastTick = this.stream.tick();
+  /** Chronologie : tout sauf les commentaires. */
+  protected readonly events = computed(() => this.history().filter((e) => e.action !== 'COMMENTED'));
+  /** Journal de bord : les commentaires. */
+  protected readonly notes = computed(() => this.history().filter((e) => e.action === 'COMMENTED'));
+  protected readonly delay = computed(() => {
+    const current = this.incident();
+    return current ? delaySeconds(current.measuredAt, current.createdAt) : null;
+  });
 
   constructor() {
-    // Une notification arrive : on recharge l'incident (un autre utilisateur l'a peut-être modifié).
+    this.zones.load();
+    // On (re)charge quand on change d'incident et à chaque notification reçue.
     effect(() => {
-      const tick = this.stream.tick();
-      if (tick !== this.lastTick) {
-        this.lastTick = tick;
-        if (this.id) {
-          this.load();
-        }
-      }
+      const id = this.incidentId();
+      this.stream.tick();
+      untracked(() => this.load(id));
     });
   }
 
-  ngOnInit(): void {
-    this.id = Number(this.route.snapshot.paramMap.get('id'));
-    this.load();
-  }
-
-  private load(): void {
-    this.api.get(this.id).subscribe({
+  private load(id: number): void {
+    if (this.incident()?.id !== id) {
+      this.incident.set(null);
+      this.history.set([]);
+      this.notFound.set(false);
+      this.error.set(null);
+      this.assignee.set('');
+      this.commentText.set('');
+    }
+    this.api.get(id).subscribe({
       next: (incident) => {
+        if (id !== this.incidentId()) {
+          return;
+        }
         this.incident.set(incident);
-        this.loaded.set(true);
         this.notFound.set(false);
         if (incident.assignee && !this.assignee()) {
           this.assignee.set(incident.assignee);
         }
       },
       error: (err) => {
-        this.loaded.set(true);
+        if (id !== this.incidentId()) {
+          return;
+        }
         this.notFound.set(err?.status === 404);
         this.error.set(errorMessage(err, "Impossible de charger l'incident."));
       },
     });
-    this.loadHistory();
+    this.loadHistory(id);
   }
 
-  private loadHistory(): void {
-    this.api.history(this.id).subscribe({
-      next: (entries) => this.history.set(entries),
-      error: () => this.history.set([]),
+  private loadHistory(id: number): void {
+    this.api.history(id).subscribe({
+      next: (entries) => id === this.incidentId() && this.history.set(entries),
+      error: () => id === this.incidentId() && this.history.set([]),
     });
   }
 
-  /** Confirmer, assigner, démarrer, résoudre ou clore. Le serveur refuse une transition interdite (message affiché). */
+  /** Confirmer, affecter, démarrer, résoudre ou clore. Le serveur refuse une transition interdite (message affiché). */
   protected change(status: IncidentStatus): void {
     const current = this.incident();
     if (!current || this.busy()) {
@@ -107,7 +124,7 @@ export class IncidentDetail implements OnInit {
     if (status === 'ASSIGNED') {
       assignee = this.assignee().trim();
       if (!assignee) {
-        this.error.set('Indique le technicien à assigner.');
+        this.error.set('Indique le technicien à affecter.');
         return;
       }
     }
@@ -117,7 +134,8 @@ export class IncidentDetail implements OnInit {
       next: (updated) => {
         this.incident.set(updated);
         this.busy.set(false);
-        this.loadHistory();
+        this.loadHistory(updated.id);
+        this.changed.emit();
       },
       error: (err) => {
         this.busy.set(false);
@@ -138,21 +156,20 @@ export class IncidentDetail implements OnInit {
       next: () => {
         this.commentText.set('');
         this.busy.set(false);
-        this.loadHistory();
+        this.loadHistory(current.id);
       },
       error: (err) => {
         this.busy.set(false);
-        this.error.set(errorMessage(err, "Commentaire refusé."));
+        this.error.set(errorMessage(err, 'Commentaire refusé.'));
       },
     });
   }
 
-  protected actionClass(status: IncidentStatus): string {
-    return status === 'CLOSED'
-      ? 'bg-surface-container text-on-surface hover:bg-surface-container-high'
-      : 'bg-primary text-on-primary hover:brightness-110';
+  protected buttonClass(status: IncidentStatus): string {
+    return status === 'RESOLVED' ? 'bg-tertiary text-on-tertiary hover:bg-tertiary-container' : 'bg-primary text-on-primary hover:brightness-110';
   }
 
+  protected readonly code = incidentCode;
   protected readonly statusLabel = statusLabel;
   protected readonly statusClass = statusClass;
   protected readonly priorityLabel = priorityLabel;
@@ -161,4 +178,5 @@ export class IncidentDetail implements OnInit {
   protected readonly actionLabel = actionLabel;
   protected readonly buttonLabel = buttonLabel;
   protected readonly formatDateTime = formatDateTime;
+  protected readonly formatTime = formatTime;
 }

@@ -20,7 +20,7 @@ export function nextStatuses(status: IncidentStatus): IncidentStatus[] {
 const STATUS_LABEL: Record<IncidentStatus, string> = {
   OPEN: 'Ouvert',
   CONFIRMED: 'Confirmé',
-  ASSIGNED: 'Assigné',
+  ASSIGNED: 'Affecté',
   IN_PROGRESS: 'En cours',
   RESOLVED: 'Résolu',
   CLOSED: 'Clos',
@@ -37,7 +37,7 @@ const STATUS_CLASS: Record<IncidentStatus, string> = {
 
 const PRIORITY_LABEL: Record<Priority, string> = {
   CRITICAL: 'Critique',
-  HIGH: 'Haute',
+  HIGH: 'Élevée',
   MEDIUM: 'Moyenne',
   LOW: 'Faible',
 };
@@ -60,7 +60,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 const ACTION_LABEL: Record<HistoryAction, string> = {
   CONFIRMED: "a confirmé l'incident",
-  ASSIGNED: "a assigné l'incident",
+  ASSIGNED: "a affecté l'incident",
   COMMENTED: 'a commenté',
   CLOSED: "a clos l'incident",
   STATUS_CHANGED: "a changé l'état",
@@ -70,9 +70,9 @@ const ACTION_LABEL: Record<HistoryAction, string> = {
 const BUTTON_LABEL: Record<IncidentStatus, string> = {
   OPEN: 'Rouvrir',
   CONFIRMED: 'Confirmer',
-  ASSIGNED: 'Assigner',
+  ASSIGNED: 'Affecter',
   IN_PROGRESS: "Démarrer l'intervention",
-  RESOLVED: 'Marquer résolu',
+  RESOLVED: 'Valider la résolution',
   CLOSED: 'Clore',
 };
 
@@ -117,4 +117,70 @@ export function formatDateTime(iso: string | null): string {
     ' • ' +
     d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   );
+}
+
+export const PRIORITIES: Priority[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+
+export const INCIDENT_TYPES = ['LEAK_SUSPECTED', 'PUMP_FAULT', 'LOW_LEVEL', 'SENSOR_SILENT'];
+
+/** Les six étapes du cycle de vie, dans l'ordre, pour la barre de pipeline. */
+export const STAGES: { status: IncidentStatus; title: string; hint: string; dot: string; bar: string }[] = [
+  { status: 'OPEN', title: '1. Ouvert', hint: 'brut', dot: 'bg-error', bar: 'bg-error' },
+  { status: 'CONFIRMED', title: '2. Confirmé', hint: 'qualifié', dot: 'bg-secondary', bar: 'bg-secondary' },
+  { status: 'ASSIGNED', title: '3. Affecté', hint: 'équipe', dot: 'bg-primary', bar: 'bg-primary' },
+  { status: 'IN_PROGRESS', title: '4. En cours', hint: 'terrain actif', dot: 'bg-primary', bar: 'bg-primary' },
+  { status: 'RESOLVED', title: '5. Résolu', hint: 'à clore', dot: 'bg-tertiary', bar: 'bg-tertiary' },
+  { status: 'CLOSED', title: '6. Clos', hint: 'archivés', dot: 'bg-outline', bar: 'bg-secondary-container' },
+];
+
+/** Code lisible d'un incident, ex. INC-2026-089 (année de création + identifiant sur 3 chiffres). */
+export function incidentCode(incident: Pick<Incident, 'id' | 'createdAt'>): string {
+  const year = new Date(incident.createdAt).getUTCFullYear();
+  return `INC-${Number.isNaN(year) ? '----' : year}-${String(incident.id).padStart(3, '0')}`;
+}
+
+/** « il y a 22 min », « il y a 1 h 45 min », « il y a 3 j ». */
+export function timeAgo(iso: string | null, nowMs: number = Date.now()): string {
+  if (!iso) {
+    return '—';
+  }
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) {
+    return '—';
+  }
+  const seconds = Math.max(0, Math.round((nowMs - then) / 1000));
+  if (seconds < 60) {
+    return "à l'instant";
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `il y a ${minutes} min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `il y a ${hours} h ${String(minutes % 60).padStart(2, '0')} min`;
+  }
+  return `il y a ${Math.floor(hours / 24)} j`;
+}
+
+/** Délai entre la mesure d'origine et la création de l'incident, en secondes (NFR-02), ou null. */
+export function delaySeconds(measuredAt: string | null, createdAt: string): number | null {
+  if (!measuredAt) {
+    return null;
+  }
+  const a = new Date(measuredAt).getTime();
+  const b = new Date(createdAt).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) {
+    return null;
+  }
+  return Math.max(0, Math.round((b - a) / 1000));
+}
+
+/** Heure seule (HH:MM:SS), pour la chronologie. */
+export function formatTime(iso: string | null): string {
+  if (!iso) {
+    return '—';
+  }
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }

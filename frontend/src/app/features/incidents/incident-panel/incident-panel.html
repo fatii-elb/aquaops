@@ -1,0 +1,176 @@
+@if (notFound()) {
+  <p role="alert" class="rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">Cet incident n'existe pas.</p>
+} @else if (!incident()) {
+  <div class="rounded-xl bg-surface-container-lowest p-space-xl text-secondary shadow-sm">Chargement de l'incident…</div>
+} @else {
+  @let inc = incident()!;
+
+  <!-- En-tête et actions -->
+  <section class="flex flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+    <div class="flex flex-col justify-between gap-space-md lg:flex-row lg:items-center">
+      <div class="flex flex-col gap-1">
+        <div class="flex flex-wrap items-center gap-space-xs">
+          <span class="font-mono-telemetry text-mono-telemetry font-bold text-primary" data-testid="code">{{ code(inc) }}</span>
+          <span class="font-mono-telemetry text-mono-telemetry text-secondary">•</span>
+          <span class="rounded-full px-space-xs py-space-2xs font-label-sm text-label-sm font-bold uppercase {{ statusClass(inc.status) }}" data-testid="status">{{ statusLabel(inc.status) }}</span>
+          <span class="rounded-full px-space-xs py-space-2xs font-label-sm text-label-sm font-bold uppercase {{ priorityClass(inc.priority) }}" data-testid="priority">{{ priorityLabel(inc.priority) }}</span>
+        </div>
+        <h2 class="font-headline-lg text-headline-lg font-bold text-on-surface">{{ typeLabel(inc.type) }} · {{ zones.name(inc.zoneId) }}</h2>
+        @if (inc.description) {
+          <p class="font-body-md text-body-md text-on-surface-variant">{{ inc.description }}</p>
+        }
+      </div>
+      <div class="flex shrink-0 flex-wrap items-center gap-space-xs">
+        @for (s of forward(); track s) {
+          <button type="button" [attr.data-action]="s" [disabled]="busy()" (click)="change(s)"
+            class="flex items-center gap-1 rounded-lg px-space-md py-space-sm font-label-md text-label-md font-semibold shadow-sm transition-all disabled:opacity-50 {{ buttonClass(s) }}">
+            <span class="material-symbols-outlined text-[18px]">{{ s === 'RESOLVED' ? 'check_circle' : s === 'CONFIRMED' ? 'verified' : 'play_arrow' }}</span>
+            {{ buttonLabel(s) }}
+          </button>
+        }
+        @if (canClose()) {
+          <button type="button" data-action="CLOSED" [disabled]="busy()" (click)="change('CLOSED')"
+            class="flex items-center gap-1 rounded-lg bg-surface-container-high px-space-md py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest disabled:opacity-50">
+            <span class="material-symbols-outlined text-[18px]">lock</span>
+            Clore
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (canAssign()) {
+      <div class="flex flex-wrap items-end gap-space-sm rounded-lg bg-surface-container-low p-space-md">
+        <div class="flex min-w-48 flex-1 flex-col gap-space-xs">
+          <label for="assignee" class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Technicien à affecter</label>
+          <input #who id="assignee" type="text" placeholder="ex. test-technicien"
+            class="rounded-lg bg-surface-container-lowest px-space-md py-space-sm font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-primary"
+            [value]="assignee()" (input)="assignee.set(who.value)" />
+        </div>
+        <button type="button" data-action="ASSIGNED" [disabled]="busy()" (click)="change('ASSIGNED')"
+          class="flex items-center gap-1 rounded-lg bg-primary px-space-md py-space-sm font-label-md text-label-md font-semibold text-on-primary shadow-sm transition-all hover:brightness-110 disabled:opacity-50">
+          <span class="material-symbols-outlined text-[18px]">engineering</span>
+          {{ buttonLabel('ASSIGNED') }}
+        </button>
+      </div>
+    }
+
+    @if (inc.assignee) {
+      <p class="flex items-center gap-space-xs font-label-md text-label-md text-on-surface-variant">
+        <span class="material-symbols-outlined text-[16px] text-primary">person</span>
+        Affecté à <strong class="text-on-surface" data-testid="assignee">{{ inc.assignee }}</strong>
+      </p>
+    }
+
+    @if (finished()) {
+      <p class="font-body-md text-body-md text-secondary">Incident clos : aucune action possible.</p>
+    }
+
+    @if (error()) {
+      <p role="alert" class="rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">{{ error() }}</p>
+    }
+  </section>
+
+  <!-- Origine de l'incident -->
+  <section class="flex flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+    <div class="flex items-center gap-space-sm">
+      <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-error-container text-on-error-container">
+        <span class="material-symbols-outlined text-[20px]">smart_toy</span>
+      </div>
+      <div>
+        <h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Origine de l'incident</h3>
+        <p class="font-label-sm text-label-sm text-secondary">{{ inc.anomalyId ? 'Détecté automatiquement par le moteur de règles' : 'Déclaré manuellement' }}</p>
+      </div>
+    </div>
+    <dl class="grid grid-cols-1 gap-space-md md:grid-cols-2">
+      <div class="flex flex-col gap-1 rounded-xl bg-surface-container-low p-space-md">
+        <dt class="font-label-sm text-label-sm font-semibold uppercase text-secondary">Règle / type</dt>
+        <dd class="font-metric-value text-headline-md font-bold text-on-surface">{{ typeLabel(inc.type) }}</dd>
+        <dd class="font-mono-telemetry text-mono-telemetry text-secondary">{{ inc.type }}</dd>
+      </div>
+      <div class="flex flex-col gap-1 rounded-xl bg-surface-container-low p-space-md">
+        <dt class="font-label-sm text-label-sm font-semibold uppercase text-secondary">Délai mesure → incident</dt>
+        <dd class="font-metric-value text-headline-md font-bold text-on-surface" data-testid="delay">
+          @if (delay() !== null) { {{ delay() }} s } @else { — }
+        </dd>
+        <dd class="font-mono-telemetry text-mono-telemetry text-secondary">Mesure : {{ formatDateTime(inc.measuredAt) }}</dd>
+      </div>
+    </dl>
+    <div class="flex flex-col gap-space-md rounded-xl bg-surface-container-high/40 p-space-md md:flex-row md:items-center md:justify-between">
+      <div class="flex items-center gap-space-sm">
+        <span class="material-symbols-outlined text-[24px] text-primary">pin_drop</span>
+        <div class="font-body-sm text-body-sm text-on-surface">
+          <p class="font-semibold">{{ zones.name(inc.zoneId) }}@if (inc.sensorId) { · capteur {{ inc.sensorId }} }</p>
+          <p class="font-mono-telemetry text-mono-telemetry text-secondary">Anomalie : {{ inc.anomalyId ?? '—' }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Chronologie -->
+  <section class="flex flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+    <h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Chronologie opérationnelle de l'incident</h3>
+    <ol class="relative flex flex-col gap-space-lg pl-6 before:absolute before:bottom-2 before:left-2.5 before:top-2 before:w-0.5 before:bg-surface-container-high before:content-['']" data-testid="history">
+      <li class="relative flex items-start gap-space-md">
+        <span class="absolute -left-6 top-1 h-3 w-3 rounded-full bg-error ring-4 ring-error-container"></span>
+        <div class="flex flex-col gap-0.5">
+          <div class="flex items-center gap-space-xs">
+            <span class="font-mono-telemetry text-mono-telemetry font-bold text-error">{{ formatTime(inc.createdAt) }}</span>
+            <span class="font-label-md text-label-md font-semibold text-on-surface">Incident créé au statut « Ouvert »</span>
+          </div>
+          <p class="font-body-sm text-body-sm text-secondary">{{ formatDateTime(inc.createdAt) }}</p>
+        </div>
+      </li>
+      @for (entry of events(); track entry.id; let last = $last) {
+        <li class="relative flex items-start gap-space-md">
+          <span class="absolute -left-6 top-1 h-3 w-3 rounded-full bg-primary {{ last ? 'ring-4 ring-primary-fixed' : '' }}"></span>
+          <div class="flex flex-col gap-0.5">
+            <div class="flex flex-wrap items-center gap-space-xs">
+              <span class="font-mono-telemetry text-mono-telemetry font-bold text-primary">{{ formatTime(entry.occurredAt) }}</span>
+              <span class="font-label-md text-label-md font-semibold text-on-surface"><strong>{{ entry.author ?? 'Système' }}</strong> {{ actionLabel(entry.action) }}</span>
+              @if (entry.fromStatus && entry.toStatus) {
+                <span class="font-label-sm text-label-sm text-secondary">({{ statusLabel(entry.fromStatus) }} → {{ statusLabel(entry.toStatus) }})</span>
+              }
+            </div>
+            @if (entry.comment) {
+              <p class="font-body-sm text-body-sm text-secondary">{{ entry.comment }}</p>
+            }
+          </div>
+        </li>
+      }
+    </ol>
+  </section>
+
+  <!-- Journal de bord -->
+  <section class="flex flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+    <div class="flex items-center justify-between">
+      <h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Journal de bord opérateur &amp; main courante</h3>
+      <span class="font-label-sm text-label-sm text-secondary">Trace d'audit</span>
+    </div>
+    <div class="flex flex-col gap-space-sm" data-testid="notes">
+      @for (note of notes(); track note.id) {
+        <div class="flex flex-col gap-1 rounded-lg bg-surface-container-low p-space-md">
+          <div class="flex items-center justify-between font-label-sm text-label-sm text-secondary">
+            <span class="font-semibold text-on-surface">{{ note.author ?? 'Système' }}</span>
+            <span class="font-mono-telemetry text-mono-telemetry">{{ formatTime(note.occurredAt) }}</span>
+          </div>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">{{ note.comment }}</p>
+        </div>
+      } @empty {
+        <p class="font-body-sm text-body-sm text-secondary">Aucune observation consignée pour le moment.</p>
+      }
+    </div>
+    @if (canComment()) {
+      <form class="flex items-center gap-space-sm pt-space-xs" (submit)="$event.preventDefault(); sendComment()">
+        <label for="comment" class="sr-only">Ajouter une observation</label>
+        <input #c id="comment" type="text" placeholder="Ajouter une instruction ou une observation d'astreinte..."
+          class="flex-1 rounded-lg bg-surface-container-low px-space-md py-2.5 font-body-sm text-body-sm text-on-surface placeholder:text-secondary focus:bg-surface-container focus:outline-none"
+          [value]="commentText()" (input)="commentText.set(c.value)" />
+        <button type="submit" data-testid="send-comment" [disabled]="busy() || !commentText().trim()"
+          class="flex items-center gap-1 rounded-lg bg-primary px-space-lg py-2.5 font-label-md text-label-md font-semibold text-on-primary shadow-sm transition-all hover:brightness-105 disabled:opacity-50">
+          <span class="material-symbols-outlined text-[18px]">send</span>
+          Consigner
+        </button>
+      </form>
+    }
+  </section>
+}
