@@ -1,0 +1,131 @@
+<div class="min-h-screen bg-background font-body-md text-body-md text-on-surface antialiased">
+
+  <!-- ===== Barre du haut ===== -->
+  <header class="sticky top-0 z-40 flex h-16 items-center justify-between bg-surface-container-lowest/90 px-space-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl">
+    <div class="flex items-center gap-space-md">
+      <a routerLink="/dashboard" class="flex items-center gap-space-xs rounded-lg px-space-sm py-1 text-secondary transition-colors hover:bg-surface-container-low hover:text-on-surface" title="Retour au tableau de bord">
+        <span class="material-symbols-outlined text-[20px]">arrow_back</span>
+        <span class="font-label-md text-label-md">Tableau de bord</span>
+      </a>
+      <div class="h-4 w-px bg-outline-variant/50"></div>
+      <h1 class="font-headline-md text-headline-md font-bold tracking-tight">Journal d'audit</h1>
+    </div>
+    <div class="flex items-center gap-space-md">
+      <span class="font-label-md text-label-md font-semibold text-on-surface">{{ userName }}</span>
+      <a (click)="logout()" class="rounded-lg p-1.5 text-secondary transition-colors hover:bg-error-container/40 hover:text-error" title="Déconnexion">
+        <span class="material-symbols-outlined text-[18px]">logout</span>
+      </a>
+    </div>
+  </header>
+
+  <main class="mx-auto w-full max-w-7xl px-space-xl pb-space-3xl pt-space-xl">
+    <p class="mb-space-lg font-body-md text-body-md text-secondary">
+      Qui a fait quoi, et quand : actions sur les actifs, les interventions et les incidents. Les plus récentes d'abord.
+    </p>
+
+    <!-- ===== Filtres ===== -->
+    <form (ngSubmit)="apply()" aria-label="Filtres du journal" class="mb-space-lg grid grid-cols-1 items-end gap-space-md rounded-xl bg-surface-container-lowest p-space-lg shadow-sm md:grid-cols-2 lg:grid-cols-5">
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Utilisateur</span>
+        <input type="text" name="actor" [(ngModel)]="actor" placeholder="ex. test-superviseur" data-testid="filter-actor"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface placeholder:text-secondary focus:outline-none focus:ring-1 focus:ring-primary" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Type d'action</span>
+        <select name="action" [(ngModel)]="action" data-testid="filter-action"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="">Toutes</option>
+          @for (a of actions(); track a) {
+            <option [value]="a">{{ actionLabel(a) }}</option>
+          }
+        </select>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Du</span>
+        <input type="date" name="from" [(ngModel)]="from" data-testid="filter-from"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Au</span>
+        <input type="date" name="to" [(ngModel)]="to" data-testid="filter-to"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary" />
+      </label>
+      <div class="flex gap-space-sm">
+        <button type="submit" data-testid="apply"
+          class="flex-1 rounded-lg bg-primary px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-primary transition-colors hover:bg-primary-container">
+          Filtrer
+        </button>
+        <button type="button" (click)="reset()" data-testid="reset"
+          class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest">
+          Réinitialiser
+        </button>
+      </div>
+    </form>
+
+    @if (error()) {
+      <p role="alert" data-testid="error"
+        class="mb-space-md rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">
+        {{ error() }}
+      </p>
+    }
+
+    <!-- ===== Tableau ===== -->
+    <section aria-label="Journal d'audit" class="overflow-x-auto rounded-xl bg-surface-container-lowest shadow-sm">
+      <table class="w-full text-left">
+        <thead class="bg-surface-container-low">
+          <tr class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Quand</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Qui</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Quoi</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Détails</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of entries(); track e.id) {
+            <tr class="border-t border-outline-variant/30 align-top hover:bg-surface-container-low/50" data-testid="row">
+              <td class="whitespace-nowrap px-space-lg py-space-sm font-mono-telemetry text-mono-telemetry text-on-surface-variant">{{ when(e.occurredAt) }}</td>
+              <td class="px-space-lg py-space-sm">
+                <span class="font-label-md text-label-md font-semibold text-on-surface">{{ e.actor }}</span>
+                @if (e.actorRole) {
+                  <span class="ml-1 rounded-full bg-secondary-container px-2 py-0.5 font-label-sm text-label-sm text-on-secondary-container">{{ e.actorRole }}</span>
+                }
+              </td>
+              <td class="px-space-lg py-space-sm">
+                <span class="font-label-md text-label-md font-semibold text-on-surface">{{ actionLabel(e.action) }}</span>
+                <span class="block font-body-sm text-body-sm text-secondary">
+                  {{ entityLabel(e.entityType) }}@if (e.entityId) { n° {{ e.entityId }} }
+                </span>
+              </td>
+              <td class="px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant">{{ e.details || '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (loading() && !loaded()) {
+        <p class="px-space-lg py-space-lg font-body-md text-body-md text-secondary">Chargement du journal…</p>
+      } @else if (loaded() && entries().length === 0 && !error()) {
+        <p data-testid="empty" class="px-space-lg py-space-lg font-body-md text-body-md text-secondary">Aucune entrée ne correspond à ces filtres.</p>
+      }
+    </section>
+
+    <!-- ===== Pagination ===== -->
+    <nav aria-label="Pagination" class="mt-space-md flex items-center justify-between">
+      <p class="font-label-md text-label-md text-secondary" data-testid="summary">
+        @if (totalElements() > 0) {
+          Page {{ page() + 1 }} sur {{ totalPages() }} · {{ totalElements() }} entrée{{ totalElements() > 1 ? 's' : '' }}
+        }
+      </p>
+      <div class="flex gap-space-sm">
+        <button type="button" (click)="previous()" [disabled]="page() === 0 || loading()" data-testid="previous"
+          class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest disabled:cursor-not-allowed disabled:opacity-40">
+          Précédent
+        </button>
+        <button type="button" (click)="next()" [disabled]="page() + 1 >= totalPages() || loading()" data-testid="next"
+          class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest disabled:cursor-not-allowed disabled:opacity-40">
+          Suivant
+        </button>
+      </div>
+    </nav>
+  </main>
+</div>
