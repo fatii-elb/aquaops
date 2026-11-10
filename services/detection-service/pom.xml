@@ -28,6 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
+		<surefire.exitTimeout>300</surefire.exitTimeout>
 	</properties>
 	<dependencies>
 		<dependency>
