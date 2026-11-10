@@ -1,0 +1,10 @@
+title = "AquaOps Gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fichiers d'exemple avec valeurs factices"
+paths = [
+  '''\.env\.example$''',
+]
