@@ -55,7 +55,7 @@ public class IncidentEventsConsumer {
             System.out.println("Audit enregistré: " + what);
 
         } catch (Exception e) {
-            System.err.println("Erreur lors du traitement du message: " + e.getMessage());
+            System.err.println("Erreur lors du traitement du message: " + e.getMessage()); e.printStackTrace();
         }
     }
 }

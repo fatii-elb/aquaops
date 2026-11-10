@@ -1,28 +1,59 @@
 package ma.aquaops.notifications;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.MessageListenerContainer;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
+import org.springframework.test.annotation.DirtiesContext;
 
-import java.time.Instant;
+import java.time.Duration;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.awaitility.Awaitility.await;
 
+@SpringBootTest(properties = "spring.kafka.consumer.auto-offset-reset=earliest")
+@EmbeddedKafka(partitions = 1, topics = "incident-events", bootstrapServersProperty = "spring.kafka.bootstrap-servers")
+@DirtiesContext
 class AuditLogTest {
 
+    @Autowired
+    private KafkaTemplate<String, String> kafkaTemplate;
+
+    @Autowired
+    private AuditLogRepository auditLogRepository;
+
+    @Autowired
+    private KafkaListenerEndpointRegistry registry;
+
+    @BeforeEach
+    void waitForConsumer() {
+        for (MessageListenerContainer container : registry.getListenerContainers()) {
+            ContainerTestUtils.waitForAssignment(container, 1);
+        }
+    }
+
     @Test
-    void testAuditLogCreation() {
-        // Préparer
-        String who = "system";
-        Instant when = Instant.now();
-        String what = "INCIDENT_CREATED sur l'incident 99 (zone 5)";
+    void testAuditLogSaved() {
+        String message = """
+                {
+                  "eventVersion": "1",
+                  "eventType": "INCIDENT_CREATED",
+                  "incidentId": 99,
+                  "zoneId": 5,
+                  "status": "OPEN",
+                  "occurredAt": "2026-10-12T21:30:05Z"
+                }
+                """;
 
-        // Agir
-        AuditLog auditLog = new AuditLog(who, when, what);
+        kafkaTemplate.send("incident-events", message);
 
-        // Vérifier
-        assertNotNull(auditLog);
-        assertEquals(who, auditLog.getWho());
-        assertEquals(when, auditLog.getWhen());
-        assertEquals(what, auditLog.getWhat());
+        await().atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> auditLogRepository.findAll().stream()
+                        .anyMatch(a -> a.getWhat().contains("99") && a.getWhat().contains("INCIDENT_CREATED")));
     }
 }

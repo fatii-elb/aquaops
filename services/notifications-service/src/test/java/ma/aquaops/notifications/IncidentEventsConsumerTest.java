@@ -1,13 +1,19 @@
 package ma.aquaops.notifications;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.time.Duration;
+
+import static org.awaitility.Awaitility.await;
 
 // earliest pour CE test seulement : le consommateur lit le message meme s'il a ete
 // publie avant l'attribution de sa partition. Sans danger ici : @EmbeddedKafka et
@@ -23,8 +29,19 @@ class IncidentEventsConsumerTest {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private KafkaListenerEndpointRegistry registry;
+
+    @BeforeEach
+    void waitForConsumer() {
+        // On n'envoie rien tant que le consommateur n'est pas vraiment prêt
+        for (MessageListenerContainer container : registry.getListenerContainers()) {
+            ContainerTestUtils.waitForAssignment(container, 1);
+        }
+    }
+
     @Test
-    void testNotificationReceived() throws Exception {
+    void testNotificationReceived() {
         String message = """
                 {
                   "eventVersion": "1",
@@ -38,18 +55,10 @@ class IncidentEventsConsumerTest {
 
         kafkaTemplate.send("incident-events", message);
 
-        // Attendre la notification, 15 s au plus : rejoindre le groupe Kafka
-        // peut prendre plusieurs secondes sur une machine lente (CI).
-        long limite = System.currentTimeMillis() + 15_000;
-        while (!notificationRecue() && System.currentTimeMillis() < limite) {
-            Thread.sleep(100);
-        }
-
-        assertTrue(notificationRecue(), "La notification aurait dû être reçue");
-    }
-
-    private boolean notificationRecue() {
-        return notificationService.getNotifications().stream()
-                .anyMatch(n -> n.contains("INCIDENT_CREATED") && n.contains("42"));
+        // Réessaie toutes les 200 ms, jusqu'à 30 s maximum (CI lente)
+        await().atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> notificationService.getNotifications().stream()
+                        .anyMatch(n -> n.contains("INCIDENT_CREATED") && n.contains("42")));
     }
 }
