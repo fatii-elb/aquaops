@@ -1,0 +1,144 @@
+<app-shell title="Gestion des incidents" active="incidents">
+  <div class="flex flex-col gap-space-xl p-space-xl lg:p-space-2xl">
+
+    <!-- En-tête -->
+    <section class="flex flex-col justify-between gap-space-lg rounded-xl bg-surface-container-lowest p-space-xl shadow-sm lg:flex-row lg:items-center">
+      <div class="flex min-w-0 flex-col gap-space-2xs">
+        <div class="flex flex-wrap items-center gap-space-sm">
+          <span class="flex items-center gap-space-2xs rounded-full bg-error-container px-space-sm py-space-2xs font-label-sm text-label-sm font-bold uppercase tracking-wider text-on-error-container">
+            <span class="h-1.5 w-1.5 animate-ping rounded-full bg-error"></span>
+            Supervision opérationnelle
+          </span>
+        </div>
+        <h1 class="font-display-md text-display-md tracking-tight text-on-surface">Centre de gestion des incidents</h1>
+        <p class="max-w-4xl font-body-md text-body-md text-on-surface-variant">
+          Cycle de vie d'un incident :
+          <span class="font-label-md text-label-md font-medium text-primary">Ouvert → Confirmé → Affecté → En cours → Résolu → Clos</span>.
+        </p>
+      </div>
+      <div class="flex shrink-0 flex-wrap items-center gap-space-sm">
+        <div class="flex items-center gap-space-xs rounded-lg bg-surface-container-low px-space-md py-space-sm font-label-md text-label-md text-on-surface">
+          <span class="h-2 w-2 animate-pulse rounded-full bg-error"></span>
+          <span>Incidents actifs : <strong class="font-semibold" data-testid="active-count">{{ activeCount() }}</strong></span>
+        </div>
+        <button type="button" data-testid="open-create" (click)="showCreate.set(true)"
+          class="flex items-center gap-space-xs rounded-lg bg-linear-to-r from-primary to-primary-container px-space-md py-space-sm font-label-md text-label-md text-on-primary shadow-sm transition-all hover:brightness-105 active:scale-[0.98]">
+          <span class="material-symbols-outlined text-[18px]">add_alert</span>
+          Déclarer un incident manuel
+        </button>
+      </div>
+    </section>
+
+    <!-- Pipeline -->
+    <section class="rounded-xl bg-surface-container-lowest p-space-lg shadow-sm" aria-label="Pipeline des incidents">
+      <div class="mb-space-sm flex items-center justify-between">
+        <span class="font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">Pipeline des incidents</span>
+        <span class="font-mono-telemetry text-mono-telemetry text-secondary">Cliquer une étape pour filtrer</span>
+      </div>
+      <div class="grid grid-cols-2 gap-space-sm md:grid-cols-3 xl:grid-cols-6">
+        @for (stage of stages; track stage.status) {
+          <button type="button" [attr.data-stage]="stage.status" [attr.aria-pressed]="statusFilter() === stage.status" (click)="toggleStatus(stage.status)"
+            class="flex flex-col rounded-lg p-space-md text-left transition-all {{ statusFilter() === stage.status ? 'bg-primary-fixed text-on-primary-fixed shadow-sm' : 'bg-surface-container-low hover:bg-surface-container' }}">
+            <div class="flex items-center justify-between">
+              <span class="font-label-sm text-label-sm font-semibold uppercase text-secondary">{{ stage.title }}</span>
+              <span class="h-2 w-2 rounded-full {{ stage.dot }}"></span>
+            </div>
+            <div class="mt-space-xs flex items-baseline gap-space-xs">
+              <span class="font-metric-value text-metric-value font-bold text-on-surface" data-testid="stage-count">{{ stageCounts()[stage.status] ?? 0 }}</span>
+              <span class="font-label-sm text-label-sm text-secondary">{{ stage.hint }}</span>
+            </div>
+            <div class="mt-space-sm h-1 w-full overflow-hidden rounded-full bg-surface-container-high">
+              <div class="h-full rounded-full {{ stage.bar }}" [style.width.%]="percent(stageCounts()[stage.status])"></div>
+            </div>
+          </button>
+        }
+      </div>
+    </section>
+
+    @if (error()) {
+      <p role="alert" class="rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">
+        Incidents indisponibles : nouvelle tentative dans quelques secondes.
+      </p>
+    }
+
+    <div class="grid grid-cols-1 gap-space-xl xl:grid-cols-12">
+
+      <!-- Liste -->
+      <div class="flex flex-col gap-space-md xl:col-span-5">
+        <div class="flex flex-col gap-space-sm rounded-xl bg-surface-container-lowest p-space-md shadow-sm">
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-secondary">filter_alt</span>
+            <label for="incident-search" class="sr-only">Filtrer les incidents</label>
+            <input #q id="incident-search" type="text" placeholder="Filtrer par code, zone, type, technicien..."
+              class="w-full rounded-lg bg-surface-container-low py-2 pl-9 pr-4 font-body-sm text-body-sm text-on-surface shadow-sm placeholder:text-secondary focus:bg-surface-container-lowest focus:outline-none"
+              [value]="query()" (input)="query.set(q.value)" />
+          </div>
+          <div class="flex items-center gap-space-2xs overflow-x-auto pb-1">
+            <button type="button" data-priority="ALL" (click)="setPriority('')"
+              class="shrink-0 rounded-full px-space-sm py-1 font-label-sm text-label-sm font-semibold {{ priorityFilter() === '' ? 'bg-primary text-on-primary' : 'bg-surface-container-low text-on-surface hover:bg-surface-container-high' }}">
+              Tous ({{ total() }})
+            </button>
+            @for (p of priorities; track p) {
+              <button type="button" [attr.data-priority]="p" (click)="setPriority(p)"
+                class="shrink-0 rounded-full px-space-sm py-1 font-label-sm text-label-sm font-semibold {{ priorityFilter() === p ? 'bg-primary text-on-primary' : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high' }}">
+                {{ priorityLabel(p) }} ({{ priorityCounts()[p] ?? 0 }})
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (!loaded() && !error()) {
+          <p class="font-body-md text-body-md text-secondary">Chargement des incidents…</p>
+        }
+        @if (loaded() && rows().length === 0) {
+          <p class="rounded-xl bg-surface-container-lowest p-space-xl text-center font-body-md text-body-md text-secondary shadow-sm">Aucun incident pour ce filtre.</p>
+        }
+
+        <div class="flex flex-col gap-space-sm" data-testid="incident-list">
+          @for (inc of rows(); track inc.id) {
+            <button type="button" [attr.data-incident]="inc.id" [attr.aria-current]="selected() === inc.id ? 'true' : null" (click)="select(inc.id)"
+              class="relative flex w-full flex-col gap-space-sm rounded-xl bg-surface-container-lowest p-space-lg text-left transition-all {{ selected() === inc.id ? 'shadow-md' : 'shadow-sm hover:bg-surface-container-low' }} {{ inc.status === 'CLOSED' ? 'opacity-80 hover:opacity-100' : '' }}">
+              @if (selected() === inc.id) {
+                <span class="absolute bottom-0 left-0 top-0 w-1.5 rounded-l-xl {{ inc.priority === 'CRITICAL' ? 'bg-error' : 'bg-primary' }}"></span>
+              }
+              <div class="flex items-start justify-between gap-space-sm">
+                <div class="flex flex-wrap items-center gap-space-xs">
+                  <span class="rounded px-space-xs py-space-2xs font-mono-telemetry text-label-sm font-bold uppercase tracking-wider {{ priorityClass(inc.priority) }}" data-col="priority">{{ priorityLabel(inc.priority) }}</span>
+                  <span class="font-mono-telemetry text-mono-telemetry font-bold text-on-surface" data-col="code">#{{ code(inc) }}</span>
+                </div>
+                <span class="rounded-full px-space-sm py-space-2xs font-label-sm text-label-sm font-semibold {{ statusClass(inc.status) }}" data-col="status">{{ statusLabel(inc.status) }}</span>
+              </div>
+              <div>
+                <h3 class="font-headline-md text-headline-md font-semibold leading-snug text-on-surface {{ inc.status === 'CLOSED' ? 'line-through decoration-secondary/50' : '' }}">{{ typeLabel(inc.type) }}</h3>
+                <p class="mt-1 font-body-sm text-body-sm text-secondary">{{ zones.name(inc.zoneId) }}@if (inc.description) { • {{ inc.description }} }</p>
+              </div>
+              <div class="flex items-center justify-between pt-space-xs font-label-sm text-label-sm text-secondary">
+                @if (inc.assignee) {
+                  <span class="flex items-center gap-space-xs"><span class="material-symbols-outlined text-[16px] text-primary">person</span><span class="font-medium text-on-surface">{{ inc.assignee }}</span></span>
+                } @else if (inc.status === 'CONFIRMED') {
+                  <span class="font-medium italic text-error">En attente d'affectation technicien</span>
+                } @else {
+                  <span>Non affecté</span>
+                }
+                <span class="font-mono-telemetry text-mono-telemetry">Créé {{ age(inc.createdAt) }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Incident choisi -->
+      <div class="xl:col-span-7">
+        @if (selected(); as id) {
+          <app-incident-panel [incidentId]="id" (changed)="load()" />
+        } @else if (loaded()) {
+          <div class="rounded-xl bg-surface-container-lowest p-space-xl text-center text-secondary shadow-sm">Aucun incident à afficher.</div>
+        }
+      </div>
+    </div>
+  </div>
+
+  @if (showCreate()) {
+    <app-incident-create [zones]="zones.zones()" (created)="onCreated($event)" (cancelled)="showCreate.set(false)" />
+  }
+</app-shell>

@@ -48,7 +48,7 @@
           </div>
           <span class="px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-secondary-container text-on-secondary-container font-bold">4</span>
         </a>
-        <a class="flex items-center justify-between px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors">
+        <a routerLink="/incidents" class="flex items-center justify-between px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors">
           <div class="flex items-center gap-space-md">
             <span class="material-symbols-outlined text-[20px]">emergency</span>
             <span class="font-body-md text-body-md">Incidents</span>
@@ -166,6 +166,8 @@
         </div>
       </div>
     </header>
+
+    <app-notification-toasts />
 
     <!-- ===== Contenu ===== -->
     <main class="relative pt-16 w-full px-space-xl pb-space-3xl min-h-screen bg-background">

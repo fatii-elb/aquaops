@@ -1,0 +1,19 @@
+<div class="pointer-events-none fixed right-space-xl top-20 z-[60] flex w-80 flex-col gap-space-sm" role="status" aria-live="polite">
+  @for (n of stream.toasts(); track n.id) {
+    <article class="pointer-events-auto flex items-start gap-space-sm rounded-xl border-l-4 p-space-md shadow-xl {{ cardClass(n.severity) }}" [attr.data-severity]="n.severity">
+      <span class="material-symbols-outlined mt-0.5 text-[20px]" style="font-variation-settings: 'FILL' 1;">{{ icon(n.severity) }}</span>
+      <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <p class="font-label-md text-label-md font-bold break-words">{{ n.text }}</p>
+        <div class="flex items-center justify-between font-label-sm text-label-sm opacity-80">
+          <span>{{ time(n.receivedAt) }}</span>
+          @if (n.incidentId !== null) {
+            <a [routerLink]="['/incidents', n.incidentId]" class="font-bold underline">Voir l'incident</a>
+          }
+        </div>
+      </div>
+      <button type="button" class="rounded-lg p-0.5 hover:bg-black/10" aria-label="Fermer la notification" (click)="stream.dismiss(n.id)">
+        <span class="material-symbols-outlined text-[16px]">close</span>
+      </button>
+    </article>
+  }
+</div>

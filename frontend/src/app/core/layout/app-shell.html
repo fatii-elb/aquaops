@@ -1,0 +1,127 @@
+<div class="min-h-screen bg-background font-body-md text-body-md text-on-surface antialiased">
+  <app-notification-toasts />
+
+  <!-- ===== Menu à gauche ===== -->
+  <aside class="fixed left-0 top-0 z-50 flex h-full w-72 flex-col justify-between overflow-y-auto bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
+    <div class="flex flex-col">
+      <div class="px-space-xl pt-space-xl pb-space-md">
+        <div class="flex items-center gap-space-sm">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-on-primary shadow-sm">
+            <span class="material-symbols-outlined text-[22px]">water_drop</span>
+          </div>
+          <div class="flex items-center gap-space-xs">
+            <span class="font-headline-md text-headline-md tracking-tight text-on-surface">AquaOps</span>
+            <span class="rounded-full bg-secondary-container px-space-xs py-space-2xs font-label-sm text-label-sm text-on-secondary-container">v1.1.0-demo</span>
+          </div>
+        </div>
+        <p class="mt-space-2xs font-label-sm text-label-sm uppercase tracking-wide text-secondary">Surveiller • Détecter • Protéger</p>
+        <div class="mt-space-md flex items-center gap-space-xs rounded-lg bg-surface-container-low px-space-md py-space-xs">
+          <span class="h-2 w-2 animate-pulse rounded-full bg-tertiary"></span>
+          <span class="font-label-sm text-label-sm font-medium text-on-surface-variant">Données simulées (Rabat/Secteur)</span>
+        </div>
+      </div>
+
+      <nav class="mt-space-sm flex flex-col gap-space-2xs px-space-md" aria-label="Navigation principale">
+        @for (item of nav; track item.key) {
+          @if (item.link) {
+            <a
+              [routerLink]="item.link"
+              [attr.aria-current]="active() === item.key ? 'page' : null"
+              class="flex items-center gap-space-md rounded-lg px-space-md py-space-sm transition-all {{ active() === item.key ? 'bg-primary font-semibold text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface' }}"
+            >
+              <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
+              <span class="font-label-md text-label-md">{{ item.label }}</span>
+            </a>
+          } @else {
+            <div class="flex cursor-default items-center gap-space-md rounded-lg px-space-md py-space-sm text-on-surface-variant/70">
+              <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
+              <span class="font-label-md text-label-md">{{ item.label }}</span>
+            </div>
+          }
+        }
+      </nav>
+    </div>
+
+    <div class="p-space-md">
+      <div class="mb-space-sm flex items-center justify-between rounded-lg bg-surface-container-low px-space-md py-space-xs">
+        <div class="flex items-center gap-space-xs">
+          <span class="material-symbols-outlined text-[16px] text-tertiary">lock</span>
+          <span class="font-label-sm text-label-sm text-on-surface-variant">VPN Tailscale</span>
+        </div>
+        <span class="font-label-sm text-label-sm font-semibold text-tertiary">Actif</span>
+      </div>
+      <div class="flex items-center justify-between rounded-xl bg-surface-container-low p-space-sm">
+        <div class="flex items-center gap-space-sm overflow-hidden">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
+            <span class="material-symbols-outlined text-[18px] text-on-primary">person</span>
+          </div>
+          <div class="truncate">
+            <p class="truncate font-label-md text-label-md font-semibold text-on-surface">{{ userName }}</p>
+            <p class="truncate font-label-sm text-label-sm text-secondary">Superviseur réseau</p>
+          </div>
+        </div>
+        <button type="button" (click)="logout()" title="Déconnexion" aria-label="Déconnexion"
+          class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-error">
+          <span class="material-symbols-outlined text-[20px]">logout</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="pl-72">
+    <!-- ===== Barre du haut ===== -->
+    <header class="fixed left-72 right-0 top-0 z-40 h-16 bg-surface-container-lowest/90 shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl">
+      <div class="flex h-16 w-full items-center justify-between gap-space-lg px-space-xl">
+        <div class="flex min-w-0 items-center gap-space-lg">
+          <div class="flex shrink-0 items-center gap-space-xs font-label-md text-label-md text-on-surface-variant">
+            <span class="material-symbols-outlined text-[18px]">water</span>
+            <span>AquaOps</span>
+            <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+            <span class="truncate font-semibold text-on-surface">{{ title() }}</span>
+          </div>
+          <div class="hidden items-center gap-space-xs rounded-full px-space-md py-space-xs xl:flex {{ stream.connected() ? 'bg-tertiary-fixed/30' : 'bg-amber-100' }}" data-testid="live-state">
+            <span class="h-2 w-2 rounded-full {{ stream.connected() ? 'animate-pulse bg-tertiary' : 'bg-amber-500' }}"></span>
+            <span class="font-label-sm text-label-sm font-medium text-on-surface-variant">
+              {{ stream.connected() ? 'Temps réel connecté' : 'Temps réel en attente de connexion' }}
+            </span>
+          </div>
+        </div>
+
+        <div class="relative flex shrink-0 items-center gap-space-md">
+          <div class="flex items-center rounded-lg bg-surface-container-low px-space-sm py-1.5 font-label-sm text-label-sm font-semibold text-on-surface">FR</div>
+          <button type="button" (click)="bellOpen.set(!bellOpen())" aria-label="Notifications" [attr.aria-expanded]="bellOpen()"
+            class="relative rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface">
+            <span class="material-symbols-outlined text-[20px]">notifications</span>
+            @if (stream.items().length > 0) {
+              <span class="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 font-label-sm text-[10px] font-bold text-on-error" data-testid="bell-count">{{ badge() }}</span>
+            }
+          </button>
+          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-primary">
+            <span class="material-symbols-outlined text-[18px] text-on-primary">person</span>
+          </div>
+
+          @if (bellOpen()) {
+            <div class="absolute right-0 top-12 z-50 w-96 max-w-[90vw] rounded-xl bg-surface-container-lowest p-space-md shadow-2xl" role="dialog" aria-label="Dernières notifications">
+              <p class="mb-space-sm font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Dernières notifications</p>
+              @if (stream.items().length === 0) {
+                <p class="font-body-sm text-body-sm text-secondary">Aucune notification reçue depuis l'ouverture de la page.</p>
+              }
+              <ul class="flex max-h-80 flex-col gap-space-xs overflow-y-auto">
+                @for (n of stream.items(); track n.id) {
+                  <li class="rounded-lg bg-surface-container-low px-space-md py-space-sm">
+                    <p class="font-label-md text-label-md font-semibold text-on-surface">{{ n.text }}</p>
+                    <span class="font-mono-telemetry text-mono-telemetry text-secondary">{{ time(n.receivedAt) }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </div>
+      </div>
+    </header>
+
+    <main class="min-h-screen w-full bg-background pt-16">
+      <ng-content />
+    </main>
+  </div>
+</div>
