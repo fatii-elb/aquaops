@@ -1,0 +1,129 @@
+# =============================================================================
+# AquaOps image pipeline on main: test the exact commit, then build the images.
+# Card SCRUM-55 / NFR-08 · E5
+#
+# BUILD-ONLY for now: images are built but never pushed. No registry login,
+# no packages: write, no deployment. Publishing to GHCR is added only once
+# the Gitleaks (E3) and Trivy (E4) checks exist and run before any push.
+#
+#   push to main (commit S)
+#     ci           the CI workflow (ci.yml) on S: Java, PostgreSQL, Angular
+#     build-java   needs ci; 7 images, one job each, all from the shared
+#                  Dockerfile; skipped if any CI job fails
+#     images       single result: green only if CI and all 7 builds are
+#
+# The frontend image is not built yet: frontend/Dockerfile does not exist (E4).
+# Actions are pinned to a commit SHA; the comment gives the release tag.
+# =============================================================================
+
+name: Images
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One group per commit: two merges never cancel each other. The name must
+# not start with "ci-tests-" (the group used by ci.yml when called here).
+concurrency:
+  group: images-main-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  # Future registry path (lowercase, as GHCR requires). Only used as a local
+  # tag while push is false.
+  IMAGE_NAMESPACE: ghcr.io/fatii-elb/aquaops
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Same tests as pull requests, on the exact commit that reached main.
+  # ---------------------------------------------------------------------------
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  # ---------------------------------------------------------------------------
+  # One job per Java service. Build context = the service folder; Dockerfile
+  # and its .dockerignore come from deploy/docker/.
+  # ---------------------------------------------------------------------------
+  build-java:
+    name: Build ${{ matrix.image }}
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false            # one broken image does not hide the others
+      matrix:
+        include:
+          - { image: gateway,       service: gateway }
+          - { image: telemetry,     service: telemetry-service }
+          - { image: assets,        service: assets-service }
+          - { image: detection,     service: detection-service }
+          - { image: incidents,     service: incidents-service }
+          - { image: notifications, service: notifications-service }
+          - { image: simulator,     service: simulator }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      # push: false and load: false: the image only exists in the build cache
+      # of this job. Trivy (E4) will need load: true to scan it before a push.
+      # Cache: per-image scope, so the 7 services never overwrite each other.
+      - name: Build image (not pushed)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: services/${{ matrix.service }}
+          file: deploy/docker/spring-service.Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: false
+          tags: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=aquaops-${{ matrix.image }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=java-${{ matrix.image }}
+          cache-to: type=gha,scope=java-${{ matrix.image }},mode=max
+
+      - name: Summary
+        env:
+          TAG: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
+        # A Markdown table needs its header row, or GitHub shows raw pipes.
+        run: |
+          {
+            echo "| Image | Result |"
+            echo "| --- | --- |"
+            echo "| \`$TAG\` | built, not pushed |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Single status for the whole pipeline (the future deploy will need it).
+  # Fails if CI or any build failed, was cancelled or was skipped.
+  # ---------------------------------------------------------------------------
+  images:
+    name: Images result
+    if: always()
+    needs: [ci, build-java]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check results
+        env:
+          CI_RESULT: ${{ needs.ci.result }}
+          BUILD_RESULT: ${{ needs.build-java.result }}
+        run: |
+          echo "ci=$CI_RESULT build-java=$BUILD_RESULT"
+          if [ "$CI_RESULT" != "success" ]; then
+            echo "::error::CI failed on this commit: no image was built"
+            exit 1
+          fi
+          if [ "$BUILD_RESULT" != "success" ]; then
+            echo "::error::At least one image build failed"
+            exit 1
+          fi
