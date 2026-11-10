@@ -1,3 +1,4 @@
+import { NotificationToasts } from '../notifications/notification-toasts';
 import { ZoneCards } from './zone-cards/zone-cards';
 import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -5,7 +6,7 @@ import { AuthService } from '../../core/auth.service';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [RouterLink, ZoneCards],
+  imports: [RouterLink, ZoneCards, NotificationToasts],
   templateUrl: './dashboard.html',
   host: { class: 'block' },
 })
