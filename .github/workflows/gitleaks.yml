@@ -6,6 +6,10 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Appelable par le workflow Images (publish.yml, E5) : aucune image n'est
+  # construite si ce scan echoue sur le meme commit. Appele depuis un push sur
+  # main, github.event_name vaut "push" : le scan porte sur before..after.
+  workflow_call:
 
 permissions:
   contents: read

@@ -8,9 +8,11 @@
 #
 #   push to main (commit S)
 #     ci           the CI workflow (ci.yml) on S: Java, PostgreSQL, Angular
-#     build-java   needs ci; 7 images, one job each, all from the shared
-#                  Dockerfile; skipped if any CI job fails
-#     images       single result: green only if CI and all 7 builds are
+#     gitleaks     the Gitleaks workflow (gitleaks.yml, E3) on S, in parallel
+#                  with ci: the security gate, no image is built without it
+#     build-java   needs ci AND gitleaks; 7 images, one job each, all from the
+#                  shared Dockerfile; skipped if CI or Gitleaks did not succeed
+#     images       single result: green only if CI, Gitleaks and all builds are
 #
 #     build-frontend  the Angular image (frontend/Dockerfile, E4), same checks
 #
@@ -55,12 +57,21 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   # ---------------------------------------------------------------------------
+  # Secret scan of the same push (E3's workflow and .gitleaks.toml, reused as
+  # is). Runs in parallel with CI: it adds no time to the pipeline.
+  # ---------------------------------------------------------------------------
+  gitleaks:
+    name: Gitleaks
+    uses: ./.github/workflows/gitleaks.yml
+
+  # ---------------------------------------------------------------------------
   # One job per Java service. Build context = the service folder; Dockerfile
   # and its .dockerignore come from deploy/docker/.
+  # needs: a failed, cancelled or skipped CI or Gitleaks skips every build.
   # ---------------------------------------------------------------------------
   build-java:
     name: Build ${{ matrix.image }}
-    needs: ci
+    needs: [ci, gitleaks]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -157,10 +168,11 @@ jobs:
   # Angular image: context = frontend/, its own Dockerfile (nginx). Addresses
   # (Keycloak, gateway) are read at container start: nothing to build per
   # environment. Same Trivy rule as the Java images.
+  # Same gate as the Java images: CI and Gitleaks must both succeed.
   # ---------------------------------------------------------------------------
   build-frontend:
     name: Build frontend
-    needs: ci
+    needs: [ci, gitleaks]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -240,24 +252,29 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Single status for the whole pipeline (the future deploy will need it).
-  # Fails if CI or any build failed, was cancelled or was skipped.
+  # Fails if CI, Gitleaks or any build failed, was cancelled or was skipped.
   # ---------------------------------------------------------------------------
   images:
     name: Images result
     if: always()
-    needs: [ci, build-java, build-frontend]
+    needs: [ci, gitleaks, build-java, build-frontend]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Check results
         env:
           CI_RESULT: ${{ needs.ci.result }}
+          GITLEAKS_RESULT: ${{ needs.gitleaks.result }}
           BUILD_RESULT: ${{ needs.build-java.result }}
           FRONTEND_RESULT: ${{ needs.build-frontend.result }}
         run: |
-          echo "ci=$CI_RESULT build-java=$BUILD_RESULT build-frontend=$FRONTEND_RESULT"
+          echo "ci=$CI_RESULT gitleaks=$GITLEAKS_RESULT build-java=$BUILD_RESULT build-frontend=$FRONTEND_RESULT"
           if [ "$CI_RESULT" != "success" ]; then
             echo "::error::CI failed on this commit: no image was built"
+            exit 1
+          fi
+          if [ "$GITLEAKS_RESULT" != "success" ]; then
+            echo "::error::Gitleaks did not pass on this commit: no image was built"
             exit 1
           fi
           if [ "$BUILD_RESULT" != "success" ]; then
