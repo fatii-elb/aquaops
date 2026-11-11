@@ -42,7 +42,7 @@ export class IncidentCreate {
         type: this.type(),
         priority: this.priority(),
         description: this.description().trim() || null,
-        actor: this.auth.username || null,
+        actor: this.auth.username || 'anonyme',
       })
       .subscribe({
         next: (incident) => {
