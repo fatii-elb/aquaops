@@ -30,4 +30,16 @@ jobs:
           ./gitleaks version
 
       - name: Scan the repository
-        run: ./gitleaks detect --source . --config .gitleaks.toml --redact -v
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            RANGE="${PR_BASE}..${PR_HEAD}"
+          else
+            RANGE="${PUSH_BEFORE}..${PUSH_AFTER}"
+          fi
+          ./gitleaks detect --source . --config .gitleaks.toml --redact -v --log-opts="$RANGE"
