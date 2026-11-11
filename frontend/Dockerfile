@@ -29,7 +29,7 @@ RUN npm run build -- --configuration production \
  && cp -r dist/*/browser/. /out/
 
 # ---- Etape 2 : image finale (nginx, utilisateur 101, port 8080) ------------
-FROM nginxinc/nginx-unprivileged:1.28-alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine
 
 # Valeurs par defaut = environnement local. Elles sont remplacees par -e ... ou par le compose.
 ENV GATEWAY_URL=http://gateway:8080 \
@@ -38,6 +38,8 @@ ENV GATEWAY_URL=http://gateway:8080 \
 
 # L'application compilee. L'utilisateur nginx doit pouvoir ecrire config.json dans ce dossier.
 USER root
+# Correctifs de securite Alpine publies depuis la sortie de l image de base (Trivy, SCRUM-63)
+RUN apk upgrade --no-cache
 COPY --from=build /out /usr/share/nginx/html
 # Le dossier lui-meme doit etre inscriptible par l'utilisateur nginx (101) pour y creer config.json.
 RUN chown -R 101:0 /usr/share/nginx/html && chmod -R g+w /usr/share/nginx/html

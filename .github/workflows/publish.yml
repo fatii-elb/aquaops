@@ -12,7 +12,11 @@
 #                  Dockerfile; skipped if any CI job fails
 #     images       single result: green only if CI and all 7 builds are
 #
-# The frontend image is not built yet: frontend/Dockerfile does not exist (E4).
+#     build-frontend  the Angular image (frontend/Dockerfile, E4), same checks
+#
+# Trivy (SCRUM-63 / NFR-16, E4): each image is loaded into the job and scanned
+# before anything could be pushed; a CRITICAL vulnerability fails the job.
+# Accepted exceptions: deploy/trivy/.trivyignore (one line + reason each).
 # Actions are pinned to a commit SHA; the comment gives the release tag.
 # =============================================================================
 
@@ -72,8 +76,8 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
-      # push: false and load: false: the image only exists in the build cache
-      # of this job. Trivy (E4) will need load: true to scan it before a push.
+      # push: false, load: true: the image is loaded into this job's Docker so
+      # Trivy can scan it before any push (SCRUM-63).
       # Cache: per-image scope, so the 7 services never overwrite each other.
       - name: Build image (not pushed)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
@@ -82,7 +86,7 @@ jobs:
           file: deploy/docker/spring-service.Dockerfile
           platforms: linux/amd64
           push: false
-          load: false
+          load: true
           tags: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
           labels: |
             org.opencontainers.image.title=aquaops-${{ matrix.image }}
@@ -90,6 +94,16 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=java-${{ matrix.image }}
           cache-to: type=gha,scope=java-${{ matrix.image }},mode=max
+
+      - name: Trivy scan (a CRITICAL vulnerability fails the job)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: deploy/trivy/.trivyignore
 
       - name: Summary
         env:
@@ -103,13 +117,66 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
+  # Angular image: context = frontend/, its own Dockerfile (nginx). Addresses
+  # (Keycloak, gateway) are read at container start: nothing to build per
+  # environment. Same Trivy rule as the Java images.
+  # ---------------------------------------------------------------------------
+  build-frontend:
+    name: Build frontend
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - name: Build image (not pushed)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=aquaops-frontend
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+
+      - name: Trivy scan (a CRITICAL vulnerability fails the job)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: deploy/trivy/.trivyignore
+
+      - name: Summary
+        env:
+          TAG: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
+        run: |
+          {
+            echo "| Image | Result |"
+            echo "| --- | --- |"
+            echo "| \`$TAG\` | built, scanned, not pushed |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
   # Single status for the whole pipeline (the future deploy will need it).
   # Fails if CI or any build failed, was cancelled or was skipped.
   # ---------------------------------------------------------------------------
   images:
     name: Images result
     if: always()
-    needs: [ci, build-java]
+    needs: [ci, build-java, build-frontend]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -117,13 +184,18 @@ jobs:
         env:
           CI_RESULT: ${{ needs.ci.result }}
           BUILD_RESULT: ${{ needs.build-java.result }}
+          FRONTEND_RESULT: ${{ needs.build-frontend.result }}
         run: |
-          echo "ci=$CI_RESULT build-java=$BUILD_RESULT"
+          echo "ci=$CI_RESULT build-java=$BUILD_RESULT build-frontend=$FRONTEND_RESULT"
           if [ "$CI_RESULT" != "success" ]; then
             echo "::error::CI failed on this commit: no image was built"
             exit 1
           fi
           if [ "$BUILD_RESULT" != "success" ]; then
             echo "::error::At least one image build failed"
+            exit 1
+          fi
+          if [ "$FRONTEND_RESULT" != "success" ]; then
+            echo "::error::The frontend image build or its Trivy scan failed"
             exit 1
           fi

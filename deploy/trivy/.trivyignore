@@ -1,0 +1,6 @@
+# Vulnerabilites acceptees pour Trivy (SCRUM-63). Une ligne = un identifiant CVE.
+# REGLE : chaque exception a une raison, une date et une personne qui l'a validee,
+# sinon elle n'a pas sa place ici. Fichier vide = aucune exception.
+#
+# Exemple (ne pas decommenter sans raison) :
+# CVE-2099-12345   # pas de correctif, non exploitable chez nous parce que ..., revue le 2026-12-01
