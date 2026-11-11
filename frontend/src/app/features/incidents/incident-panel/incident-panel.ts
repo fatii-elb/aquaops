@@ -130,7 +130,7 @@ export class IncidentPanel {
     }
     this.error.set(null);
     this.busy.set(true);
-    this.api.update(current.id, { status, assignee, actor: this.auth.username || null }).subscribe({
+    this.api.update(current.id, { status, assignee, actor: this.auth.username || 'anonyme' }).subscribe({
       next: (updated) => {
         this.incident.set(updated);
         this.busy.set(false);
