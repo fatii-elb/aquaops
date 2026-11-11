@@ -1,0 +1,4 @@
+{
+  "issuer": "${KEYCLOAK_ISSUER}",
+  "clientId": "${KEYCLOAK_CLIENT_ID}"
+}

@@ -1,0 +1,78 @@
+# Traite au demarrage du conteneur : ${GATEWAY_URL} est remplace par la variable d'environnement.
+# (les $uri, $host... de nginx ne sont pas touches : ce ne sont pas des variables d'environnement)
+
+server {
+    listen 8080;
+    server_name _;
+    server_tokens off;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-Frame-Options "DENY" always;
+
+    # Sonde de sante (utilisee par HEALTHCHECK et les orchestrateurs).
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Adresses lues par l'application au demarrage : jamais en cache.
+    location = /config.json {
+        add_header Cache-Control "no-store" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    # Fichiers compiles : leur nom contient une empreinte, on peut les garder longtemps.
+    location ~* \.(?:js|css|woff2?|svg|png|jpe?g|ico|webp)$ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    # Notifications temps reel (SSE) : pas de tampon, connexion longue.
+    location = /api/notifications/subscribe {
+        proxy_pass ${GATEWAY_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+        add_header X-Accel-Buffering "no" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # Toute l'API passe par la passerelle (comme proxy.conf.json en developpement).
+    # GATEWAY_URL ne doit PAS finir par "/" (sinon nginx retirerait le prefixe /api).
+    location /api/ {
+        proxy_pass ${GATEWAY_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # Application Angular : toute autre adresse (/incidents/3, /dashboard...) renvoie index.html.
+    location / {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        try_files $uri $uri/ /index.html;
+    }
+}
