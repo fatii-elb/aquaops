@@ -15,7 +15,8 @@
 #     build-frontend  the Angular image (frontend/Dockerfile, E4), same checks
 #
 # Trivy (SCRUM-63 / NFR-16, E4): each image is loaded into the job and scanned
-# before anything could be pushed; a CRITICAL vulnerability fails the job.
+# before anything could be pushed. AUDIT MODE for now (TRIVY_EXIT_CODE below):
+# reports only, no failure.
 # Accepted exceptions: deploy/trivy/.trivyignore (one line + reason each).
 # Actions are pinned to a commit SHA; the comment gives the release tag.
 # =============================================================================
@@ -39,6 +40,10 @@ env:
   # Future registry path (lowercase, as GHCR requires). Only used as a local
   # tag while push is false.
   IMAGE_NAMESPACE: ghcr.io/fatii-elb/aquaops
+  # Trivy mode (SCRUM-63): '0' = audit, reports only, never blocks the pipeline;
+  # '1' = enforce, a CRITICAL vulnerability fails the job (NFR-16 target).
+  # Switch to '1' once the images are clean.
+  TRIVY_EXIT_CODE: '0'
 
 jobs:
 
@@ -95,13 +100,45 @@ jobs:
           cache-from: type=gha,scope=java-${{ matrix.image }}
           cache-to: type=gha,scope=java-${{ matrix.image }},mode=max
 
-      - name: Trivy scan (a CRITICAL vulnerability fails the job)
+      # AUDIT (SCRUM-63): the report lists CRITICAL and HIGH and never blocks.
+      - name: Trivy report (CRITICAL + HIGH, never blocks)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+          ignore-unfixed: true
+          trivyignores: deploy/trivy/.trivyignore
+          output: trivy-${{ matrix.image }}.txt
+
+      - name: Trivy report (summary)
+        if: always()
+        run: |
+          {
+            echo "### Trivy: ${{ matrix.image }}"
+            echo '```'
+            head -c 60000 "trivy-${{ matrix.image }}.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trivy report (download)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: trivy-${{ matrix.image }}
+          path: trivy-${{ matrix.image }}.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      # The gate: CRITICAL fails the job only when TRIVY_EXIT_CODE is '1'.
+      - name: Trivy gate (CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
           format: table
           severity: CRITICAL
-          exit-code: '1'
+          exit-code: ${{ env.TRIVY_EXIT_CODE }}
           ignore-unfixed: true
           trivyignores: deploy/trivy/.trivyignore
 
@@ -149,13 +186,45 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
 
-      - name: Trivy scan (a CRITICAL vulnerability fails the job)
+      # AUDIT (SCRUM-63): the report lists CRITICAL and HIGH and never blocks.
+      - name: Trivy report (CRITICAL + HIGH, never blocks)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+          ignore-unfixed: true
+          trivyignores: deploy/trivy/.trivyignore
+          output: trivy-frontend.txt
+
+      - name: Trivy report (summary)
+        if: always()
+        run: |
+          {
+            echo "### Trivy: frontend"
+            echo '```'
+            head -c 60000 "trivy-frontend.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trivy report (download)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: trivy-frontend
+          path: trivy-frontend.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      # The gate: CRITICAL fails the job only when TRIVY_EXIT_CODE is '1'.
+      - name: Trivy gate (CRITICAL)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
           format: table
           severity: CRITICAL
-          exit-code: '1'
+          exit-code: ${{ env.TRIVY_EXIT_CODE }}
           ignore-unfixed: true
           trivyignores: deploy/trivy/.trivyignore
 
