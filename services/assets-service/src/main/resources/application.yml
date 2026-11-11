@@ -7,6 +7,10 @@ spring:
     url: ${ASSETS_DB_URL:jdbc:postgresql://localhost:5432/aquaops_assets}
     username: ${DB_USER:aquaops}
     password: ${DB_PASSWORD:aquaops}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      auto-offset-reset: earliest
   jpa:
     hibernate:
       ddl-auto: update
@@ -21,3 +25,8 @@ management:
     web:
       exposure:
         include: health
+assets:
+  audit:
+    kafka:
+      # false : ne pas lire incident-events (tests sans Kafka)
+      enabled: ${ASSETS_AUDIT_KAFKA_ENABLED:true}

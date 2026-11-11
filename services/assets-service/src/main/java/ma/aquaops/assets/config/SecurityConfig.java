@@ -13,6 +13,8 @@ public class SecurityConfig {
 
     private static final String[] TOUS = {"operateur", "superviseur", "technicien", "administrateur"};
     private static final String[] ECRITURE = {"administrateur", "superviseur"};
+    // Journal d'audit (FR-24) : consultation reservee aux superviseurs et administrateurs.
+    private static final String[] AUDIT = {"administrateur", "superviseur"};
     // Changement de statut d'une intervention : le controleur verifie ensuite
     // que le technicien est bien celui qui est assigne (SCRUM-42).
     private static final String[] STATUT_INTERVENTION = {"technicien", "superviseur", "administrateur"};
@@ -26,6 +28,9 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/actuator/health/**").permitAll()
+                // Audit AVANT la regle generale GET : lecture seule, jamais d'ecriture par l'API.
+                .requestMatchers(HttpMethod.GET, "/api/assets/audit/**").hasAnyRole(AUDIT)
+                .requestMatchers("/api/assets/audit/**").denyAll()
                 .requestMatchers(HttpMethod.GET, "/api/assets/**").hasAnyRole(TOUS)
                 // Regle precise AVANT la regle generale PUT : la premiere qui correspond s'applique.
                 .requestMatchers(HttpMethod.PUT, "/api/assets/interventions/*/status").hasAnyRole(STATUT_INTERVENTION)
