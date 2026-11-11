@@ -2,9 +2,9 @@
 # AquaOps image pipeline on main: test the exact commit, then build the images.
 # Card SCRUM-55 / NFR-08 · E5
 #
-# BUILD-ONLY for now: images are built but never pushed. No registry login,
-# no packages: write, no deployment. Publishing to GHCR is added only once
-# the Gitleaks (E3) and Trivy (E4) checks exist and run before any push.
+# Publication to GHCR is prepared but OFF (GHCR_PUBLISH below). It can only be
+# switched "on" once Trivy blocks CRITICAL vulnerabilities (TRIVY_EXIT_CODE
+# '1', decision of E4): the "publish-policy" job refuses otherwise.
 #
 #   push to main (commit S)
 #     ci           the CI workflow (ci.yml) on S: Java, PostgreSQL, Angular
@@ -15,6 +15,13 @@
 #     images       single result: green only if CI, Gitleaks and all builds are
 #
 #     build-frontend  the Angular image (frontend/Dockerfile, E4), same checks
+#
+#     publish-policy  reads GHCR_PUBLISH: off | dry-run | on ("on" refused
+#                     while Trivy is audit-only)
+#     publish      only if CI, Gitleaks, the 8 builds and their scans all
+#                  succeeded: reloads the 8 SCANNED images (no rebuild), checks
+#                  they are identical, then (mode "on") pushes them with their
+#                  full-SHA tag. The only job with packages: write.
 #
 # Trivy (SCRUM-63 / NFR-16, E4): each image is loaded into the job and scanned
 # before anything could be pushed. AUDIT MODE for now (TRIVY_EXIT_CODE below):
@@ -46,6 +53,14 @@ env:
   # '1' = enforce, a CRITICAL vulnerability fails the job (NFR-16 target).
   # Switch to '1' once the images are clean.
   TRIVY_EXIT_CODE: '0'
+  # GHCR publication (SCRUM-55 / NFR-08, E5):
+  #   'off'     nothing is exported or published (current setting)
+  #   'dry-run' the 8 scanned images go through the whole publish path
+  #             (export, reload, identity check) WITHOUT any registry login
+  #             or push: measures the extra time, publishes nothing
+  #   'on'      the same, then pushes ghcr.io/...:<full SHA>. Refused while
+  #             TRIVY_EXIT_CODE is not '1'. Never a "latest" tag.
+  GHCR_PUBLISH: 'off'
 
 jobs:
 
@@ -153,6 +168,31 @@ jobs:
           ignore-unfixed: true
           trivyignores: deploy/trivy/.trivyignore
 
+      # GHCR (E5): hand the image Trivy just scanned to the publish job, with
+      # its identity (image ID + layers). After the gate: a failed scan stops
+      # the job before this step. Skipped entirely while GHCR_PUBLISH is off.
+      - name: Export scanned image
+        if: env.GHCR_PUBLISH != 'off'
+        env:
+          REF: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
+          IMAGE: ${{ matrix.image }}
+        run: |
+          mkdir -p image-export
+          docker image inspect --format '{{.Id}} {{json .RootFS.Layers}}' "$REF" > "image-export/$IMAGE.id"
+          printf '%s\n' "$REF" > "image-export/$IMAGE.ref"
+          docker save -o "image-export/$IMAGE.tar" "$REF"
+          ls -l image-export
+
+      - name: Upload scanned image
+        if: env.GHCR_PUBLISH != 'off'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: image-${{ matrix.image }}
+          path: image-export/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 1
+
       - name: Summary
         env:
           TAG: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
@@ -240,6 +280,29 @@ jobs:
           ignore-unfixed: true
           trivyignores: deploy/trivy/.trivyignore
 
+      # GHCR (E5): same export as the Java images, after the Trivy gate.
+      - name: Export scanned image
+        if: env.GHCR_PUBLISH != 'off'
+        env:
+          REF: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
+          IMAGE: frontend
+        run: |
+          mkdir -p image-export
+          docker image inspect --format '{{.Id}} {{json .RootFS.Layers}}' "$REF" > "image-export/$IMAGE.id"
+          printf '%s\n' "$REF" > "image-export/$IMAGE.ref"
+          docker save -o "image-export/$IMAGE.tar" "$REF"
+          ls -l image-export
+
+      - name: Upload scanned image
+        if: env.GHCR_PUBLISH != 'off'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: image-frontend
+          path: image-export/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 1
+
       - name: Summary
         env:
           TAG: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
@@ -251,13 +314,126 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
+  # GHCR switch, checked against the Trivy policy. No token needed at all.
+  # "on" while Trivy is audit-only is refused: it fails here (and therefore
+  # "Images result") instead of publishing unblocked images.
+  # ---------------------------------------------------------------------------
+  publish-policy:
+    name: Publish policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      mode: ${{ steps.policy.outputs.mode }}
+    steps:
+      - name: Check GHCR_PUBLISH against TRIVY_EXIT_CODE
+        id: policy
+        run: |
+          case "$GHCR_PUBLISH" in
+            off|dry-run)
+              mode="$GHCR_PUBLISH" ;;
+            on)
+              if [ "$TRIVY_EXIT_CODE" != "1" ]; then
+                echo "::error::GHCR_PUBLISH=on refused: Trivy is audit-only (TRIVY_EXIT_CODE=$TRIVY_EXIT_CODE). Blocking must be enabled first (E4)."
+                exit 1
+              fi
+              mode=on ;;
+            *)
+              echo "::error::GHCR_PUBLISH must be off, dry-run or on, got [$GHCR_PUBLISH]"
+              exit 1 ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "GHCR publication mode: $mode (TRIVY_EXIT_CODE=$TRIVY_EXIT_CODE)"
+
+  # ---------------------------------------------------------------------------
+  # Publication of the 8 SCANNED images. No checkout, no rebuild, no scanner:
+  # only our shell and the official artifact action run with packages: write.
+  # No "if" status function: runs only if EVERY job in needs succeeded (CI,
+  # Gitleaks, the 7 Java builds, the frontend build and their Trivy gates).
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to GHCR (${{ needs.publish-policy.outputs.mode }})
+    needs: [ci, gitleaks, build-java, build-frontend, publish-policy]
+    if: needs.publish-policy.outputs.mode == 'dry-run' || needs.publish-policy.outputs.mode == 'on'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      packages: write
+    env:
+      IMAGES: gateway telemetry assets detection incidents notifications simulator frontend
+      SHA: ${{ github.sha }}
+    steps:
+      # Same run only. v8 fails on any digest mismatch of the artifact.
+      - name: Download the scanned images
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: image-*
+          path: images
+          merge-multiple: true
+
+      # The image about to be published must be the one Trivy scanned: same
+      # reference, same image ID and layers, revision label = this commit.
+      - name: Reload and verify image identity
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::not a full commit SHA: $SHA"; exit 1; }
+          for img in $IMAGES; do
+            ref="$IMAGE_NAMESPACE/$img:$SHA"
+            for f in tar id ref; do
+              [ -f "images/$img.$f" ] || { echo "::error::$img: scanned image missing ($img.$f)"; exit 1; }
+            done
+            [ "$(cat "images/$img.ref")" = "$ref" ] || { echo "::error::$img: unexpected reference"; exit 1; }
+            docker load -i "images/$img.tar" > /dev/null
+            rm -f "images/$img.tar"
+            actual="$(docker image inspect --format '{{.Id}} {{json .RootFS.Layers}}' "$ref")"
+            [ "$actual" = "$(cat "images/$img.id")" ] \
+              || { echo "::error::$img: the reloaded image differs from the scanned one"; exit 1; }
+            revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$ref")"
+            [ "$revision" = "$SHA" ] || { echo "::error::$img: revision label [$revision] is not $SHA"; exit 1; }
+            echo "$img: identical to the scanned image ($ref)"
+          done
+
+      # Mode "on" only, and checked again here (defence in depth). Short-lived
+      # GITHUB_TOKEN on stdin, private Docker config deleted on exit, even on
+      # failure. Any failed push fails the step, the job and "Images result".
+      - name: Push to GHCR (full-SHA tags only)
+        if: needs.publish-policy.outputs.mode == 'on'
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ "$TRIVY_EXIT_CODE" = "1" ] || { echo "::error::refused: Trivy is audit-only"; exit 1; }
+          DOCKER_CONFIG="$(mktemp -d)"; export DOCKER_CONFIG
+          trap 'docker logout ghcr.io > /dev/null 2>&1 || true; rm -rf "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin > /dev/null
+          unset REGISTRY_TOKEN
+          {
+            echo "### GHCR publication"
+            echo "| Image | Digest |"
+            echo "| --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for img in $IMAGES; do
+            ref="$IMAGE_NAMESPACE/$img:$SHA"
+            docker push --quiet "$ref"
+            digest="$(docker image inspect --format '{{range .RepoDigests}}{{.}} {{end}}' "$ref")"
+            echo "| \`$ref\` | \`$digest\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Dry-run summary
+        if: needs.publish-policy.outputs.mode == 'dry-run'
+        run: |
+          echo "### GHCR dry-run: 8 scanned images reloaded and verified, nothing pushed" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
   # Single status for the whole pipeline (the future deploy will need it).
-  # Fails if CI, Gitleaks or any build failed, was cancelled or was skipped.
+  # Fails if CI, Gitleaks or any build failed, was cancelled or was skipped,
+  # if the publish policy failed, or if a required publication failed.
   # ---------------------------------------------------------------------------
   images:
     name: Images result
     if: always()
-    needs: [ci, gitleaks, build-java, build-frontend]
+    needs: [ci, gitleaks, build-java, build-frontend, publish-policy, publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -267,8 +443,12 @@ jobs:
           GITLEAKS_RESULT: ${{ needs.gitleaks.result }}
           BUILD_RESULT: ${{ needs.build-java.result }}
           FRONTEND_RESULT: ${{ needs.build-frontend.result }}
+          POLICY_RESULT: ${{ needs.publish-policy.result }}
+          PUBLISH_MODE: ${{ needs.publish-policy.outputs.mode }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
         run: |
           echo "ci=$CI_RESULT gitleaks=$GITLEAKS_RESULT build-java=$BUILD_RESULT build-frontend=$FRONTEND_RESULT"
+          echo "publish-policy=$POLICY_RESULT mode=$PUBLISH_MODE publish=$PUBLISH_RESULT"
           if [ "$CI_RESULT" != "success" ]; then
             echo "::error::CI failed on this commit: no image was built"
             exit 1
@@ -285,3 +465,22 @@ jobs:
             echo "::error::The frontend image build or its Trivy scan failed"
             exit 1
           fi
+          if [ "$POLICY_RESULT" != "success" ]; then
+            echo "::error::GHCR publish policy refused the configuration (see Publish policy)"
+            exit 1
+          fi
+          case "$PUBLISH_MODE" in
+            off)
+              if [ "$PUBLISH_RESULT" != "skipped" ]; then
+                echo "::error::Publication is off but the publish job did not skip"
+                exit 1
+              fi ;;
+            dry-run|on)
+              if [ "$PUBLISH_RESULT" != "success" ]; then
+                echo "::error::GHCR publication ($PUBLISH_MODE) did not succeed: nothing may be deployed from this commit"
+                exit 1
+              fi ;;
+            *)
+              echo "::error::Unknown publication mode [$PUBLISH_MODE]"
+              exit 1 ;;
+          esac
