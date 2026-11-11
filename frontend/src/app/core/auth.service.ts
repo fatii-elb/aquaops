@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { OAuthService } from 'angular-oauth2-oidc';
-import { authConfig } from './auth.config';
+import { buildAuthConfig } from './auth.config';
+import { loadAppConfig } from './app-config';
 
 interface TokenPayload {
   preferred_username?: string;
@@ -13,7 +14,7 @@ export class AuthService {
 
   /** Appelé une fois au démarrage de l'application (voir app.config.ts). */
   async init(): Promise<void> {
-    this.oauth.configure(authConfig);
+    this.oauth.configure(buildAuthConfig(await loadAppConfig()));
     try {
       await this.oauth.loadDiscoveryDocumentAndTryLogin();
       this.oauth.setupAutomaticSilentRefresh();
