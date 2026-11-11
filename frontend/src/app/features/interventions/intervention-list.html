@@ -1,0 +1,57 @@
+<section class="flex flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-sm" data-testid="interventions">
+  <div class="flex items-center justify-between">
+    <h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Interventions</h3>
+    @if (canManage() && !incidentClosed()) {
+      <button type="button" data-testid="create-intervention" [disabled]="busy()" (click)="create()"
+        class="flex items-center gap-1 rounded-lg bg-primary px-space-md py-space-sm font-label-md text-label-md font-semibold text-on-primary shadow-sm transition-all hover:brightness-110 disabled:opacity-50">
+        <span class="material-symbols-outlined text-[18px]">add</span>
+        Créer une intervention
+      </button>
+    }
+  </div>
+
+  @for (item of items(); track item.id) {
+    <div class="flex flex-col gap-space-sm rounded-lg bg-surface-container-low p-space-md" data-testid="intervention">
+      <div class="flex flex-wrap items-center gap-space-xs">
+        <span class="font-mono-telemetry text-mono-telemetry font-bold text-primary">INT-{{ item.id }}</span>
+        <span class="rounded-full px-space-xs py-space-2xs font-label-sm text-label-sm font-bold uppercase {{ statusClass(item.status) }}" data-testid="intervention-status">{{ labels[item.status] }}</span>
+        <span class="font-label-sm text-label-sm text-secondary">{{ formatDateTime(item.createdAt) }}</span>
+      </div>
+
+      <p class="font-body-sm text-body-sm text-on-surface-variant">
+        Équipe : <strong class="text-on-surface" data-testid="team">{{ item.team ?? 'non affectée' }}</strong>
+        @if (item.assignedTo) { · technicien <strong class="text-on-surface" data-testid="technician">{{ item.assignedTo }}</strong> }
+      </p>
+
+      @if (canManage() && item.status !== 'DONE') {
+        <div class="flex flex-wrap items-end gap-space-sm">
+          <input #team type="text" placeholder="Équipe" aria-label="Équipe" [value]="item.team ?? ''"
+            class="min-w-32 flex-1 rounded-lg bg-surface-container-lowest px-space-md py-space-sm font-body-sm text-body-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+          <input #tech type="text" placeholder="Technicien (facultatif)" aria-label="Technicien" [value]="item.assignedTo ?? ''"
+            class="min-w-32 flex-1 rounded-lg bg-surface-container-lowest px-space-md py-space-sm font-body-sm text-body-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+          <button type="button" data-testid="assign-intervention" [disabled]="busy()" (click)="assign(item, team.value, tech.value)"
+            class="flex items-center gap-1 rounded-lg bg-surface-container-high px-space-md py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest disabled:opacity-50">
+            <span class="material-symbols-outlined text-[18px]">engineering</span>
+            Affecter
+          </button>
+        </div>
+      }
+
+      @if (next(item); as target) {
+        <div>
+          <button type="button" data-testid="advance-intervention" [disabled]="busy()" (click)="advance(item)"
+            class="flex items-center gap-1 rounded-lg bg-primary px-space-md py-space-sm font-label-md text-label-md font-semibold text-on-primary shadow-sm transition-all hover:brightness-110 disabled:opacity-50">
+            <span class="material-symbols-outlined text-[18px]">{{ target === 'DONE' ? 'check_circle' : 'play_arrow' }}</span>
+            {{ target === 'DONE' ? 'Terminer' : 'Démarrer' }}
+          </button>
+        </div>
+      }
+    </div>
+  } @empty {
+    <p class="font-body-sm text-body-sm text-secondary">Aucune intervention pour cet incident.</p>
+  }
+
+  @if (error()) {
+    <p role="alert" class="rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container" data-testid="intervention-error">{{ error() }}</p>
+  }
+</section>

@@ -106,6 +106,9 @@
     </div>
   </section>
 
+   <!-- Interventions -->
+  <app-intervention-list [incidentId]="inc.id" [incidentClosed]="inc.status === 'CLOSED'" />
+
   <!-- Chronologie -->
   <section class="flex flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
     <h3 class="font-headline-md text-headline-md font-semibold text-on-surface">Chronologie opérationnelle de l'incident</h3>

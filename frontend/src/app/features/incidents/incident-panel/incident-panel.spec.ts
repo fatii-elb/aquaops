@@ -30,7 +30,7 @@ describe('IncidentPanel', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: AuthService, useValue: { username: 'test-superviseur' } },
+        { provide: AuthService, useValue: { username: 'test-superviseur', hasAnyRole: () => true } },
         { provide: EVENT_SOURCE_FACTORY, useValue: () => source },
       ],
     });

@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { AuthService } from '../../../core/auth.service';
 import { NotificationStream } from '../../../core/notification-stream';
+import { InterventionList } from '../../interventions/intervention-list';
 import { IncidentApi, errorMessage } from '../incident-api';
 import {
   actionLabel,
@@ -23,6 +24,7 @@ import { ZoneNames } from '../zone-names';
 /** Panneau de droite : l'incident choisi, ses actions, sa chronologie et son journal de bord. */
 @Component({
   selector: 'app-incident-panel',
+  imports: [InterventionList],
   templateUrl: './incident-panel.html',
   host: { class: 'flex flex-col gap-space-lg' },
 })
