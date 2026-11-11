@@ -58,7 +58,7 @@ describe('IncidentCenter', () => {
         },
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: AuthService, useValue: { username: 'test-superviseur', logout() {} } },
+       { provide: AuthService, useValue: { username: 'test-superviseur', hasAnyRole: () => true, logout() {} } },
         { provide: EVENT_SOURCE_FACTORY, useValue: () => source },
       ],
     });
