@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "Verification des secrets avec Gitleaks..."
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "ERREUR : Gitleaks n'est pas installe."
+    exit 1
+fi
+
+if ! gitleaks git --staged --config .gitleaks.toml --redact --no-banner; then
+    echo "ECHEC : Gitleaks a bloque le commit."
+    exit 1
+fi
+
+echo "SUCCES : verification Gitleaks terminee."
