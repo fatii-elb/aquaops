@@ -258,34 +258,26 @@ not through the gateway. Details: [`frontend/README.md`](../frontend/README.md).
 
 ---
 
-## 5. Create the test users in Keycloak
+## 5. Test users in Keycloak
 
-The realm export in `docs/keycloak/` contains the roles but **no user**: create
-them by hand after the first `docker compose up -d`.
+The realm export in `docs/keycloak/` now contains **4 test users**, one per role,
+created at the first import (see [`docs/keycloak/README.md`](keycloak/README.md)):
 
-The project has **4 roles**:
+| Role | User | First password (temporary) |
+| --- | --- | --- |
+| `administrateur` | `admin1` | `Temp-admin1-2026!` |
+| `superviseur` | `superviseur1` | `Temp-superviseur1-2026!` |
+| `operateur` | `operateur1` | `Temp-operateur1-2026!` |
+| `technicien` | `technicien1` | `Temp-technicien1-2026!` |
 
-| Role | Suggested test user |
-| --- | --- |
-| `administrateur` | `test-administrateur` |
-| `superviseur` | `test-superviseur` |
-| `operateur` | `test-operateur` |
-| `technicien` | `test-technicien` |
+Passwords are **temporary**: Keycloak asks for a new one at the first login.
+`superviseur1` and `admin1` must also set up an **authenticator app (OTP)**
+at the first login (FR-25). The import only happens when the realm does not exist
+yet: after changing `aquaops-realm.json`, recreate Keycloak (`docker compose down`
+then `up -d`; see "Au quotidien" in [`deploy/README.md`](../deploy/README.md)).
 
-For each user:
-
-1. Open http://localhost:8180/admin and log in with the values of
-   `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` (default `admin` / `admin`).
-2. Top left, switch the realm from **master** to **aquaops**.
-3. **Users > Add user**: fill *Username*, *Email*, *First name* and *Last name*
-   (otherwise Keycloak asks for them at the first login), then **Create**.
-4. **Credentials > Set password**: choose a password and turn **Temporary** off,
-   otherwise it must be changed at the first login.
-5. **Role mapping > Assign role**: choose **Filter by realm roles**, tick the
-   user's role, then **Assign**.
-
-> These users are **lost after `docker compose down`**. Use `stop`/`start` for
-> daily work: see "Au quotidien" in [`deploy/README.md`](../deploy/README.md).
+> A user created by hand in the console is **lost after `docker compose down`**.
+> Add it to `aquaops-realm.json` instead. Use `stop`/`start` for daily work.
 
 ---
 

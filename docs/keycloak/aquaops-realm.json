@@ -738,7 +738,8 @@
         "oauth2.jwt.authorization.grant.enabled": "false",
         "oauth2.device.authorization.grant.enabled": "false",
         "backchannel.logout.revoke.offline.tokens": "false",
-        "dpop.bound.access.tokens": "false"
+        "dpop.bound.access.tokens": "false",
+        "pkce.code.challenge.method": "S256"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": true,
@@ -911,6 +912,51 @@
         "organization",
         "microprofile-jwt"
       ]
+    },
+    {
+      "id": "58feb663-e7d9-43ff-83da-03832077397f",
+      "clientId": "aquaops-audit",
+      "name": "AquaOps audit (lecture des evenements)",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false",
+        "client.use.lightweight.access.token.enabled": "true"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": 0,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "organization",
+        "microprofile-jwt"
+      ],
+      "description": "Compte de service du service des actifs : lit les evenements de connexion.",
+      "secret": "${KEYCLOAK_AUDIT_CLIENT_SECRET}"
     }
   ],
   "clientScopes": [
@@ -1637,11 +1683,15 @@
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
   },
   "smtpServer": {},
-  "eventsEnabled": false,
+  "eventsEnabled": true,
   "eventsListeners": [
     "jboss-logging"
   ],
-  "enabledEventTypes": [],
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT"
+  ],
   "adminEventsEnabled": false,
   "adminEventsDetailsEnabled": false,
   "identityProviders": [],
@@ -2486,6 +2536,136 @@
           "userSetupAllowed": false
         }
       ]
+    },
+    {
+      "id": "dd616cd5-6fdb-4a05-a2ee-b9ad0384337b",
+      "alias": "MFA - superviseur",
+      "description": "Second facteur (OTP) pour le role superviseur",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-user-role",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false,
+          "authenticatorConfig": "mfa-role-superviseur"
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false
+        }
+      ]
+    },
+    {
+      "id": "cf1887c4-f088-42f4-87ce-f6f56e2a6016",
+      "alias": "MFA - administrateur",
+      "description": "Second facteur (OTP) pour le role administrateur",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-user-role",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false,
+          "authenticatorConfig": "mfa-role-administrateur"
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false
+        }
+      ]
+    },
+    {
+      "id": "e208e63b-8768-4b00-9205-43b3075445e5",
+      "alias": "forms-mfa",
+      "description": "Identifiant, mot de passe, puis OTP pour superviseur et administrateur",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false
+        },
+        {
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorFlow": true,
+          "autheticatorFlow": true,
+          "flowAlias": "MFA - superviseur"
+        },
+        {
+          "requirement": "CONDITIONAL",
+          "priority": 30,
+          "userSetupAllowed": false,
+          "authenticatorFlow": true,
+          "autheticatorFlow": true,
+          "flowAlias": "MFA - administrateur"
+        }
+      ]
+    },
+    {
+      "id": "970c3d7c-75d3-40b4-9111-fc1510f87a79",
+      "alias": "browser-mfa",
+      "description": "Connexion navigateur avec MFA selon le role (FR-25)",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false
+        },
+        {
+          "requirement": "ALTERNATIVE",
+          "priority": 25,
+          "userSetupAllowed": false,
+          "authenticator": "identity-provider-redirector",
+          "authenticatorFlow": false,
+          "autheticatorFlow": false
+        },
+        {
+          "requirement": "ALTERNATIVE",
+          "priority": 26,
+          "userSetupAllowed": false,
+          "authenticatorFlow": true,
+          "autheticatorFlow": true,
+          "flowAlias": "Organization"
+        },
+        {
+          "requirement": "ALTERNATIVE",
+          "priority": 30,
+          "userSetupAllowed": false,
+          "authenticatorFlow": true,
+          "autheticatorFlow": true,
+          "flowAlias": "forms-mfa"
+        }
+      ]
     }
   ],
   "authenticatorConfig": [
@@ -2515,6 +2695,22 @@
       "alias": "review profile config",
       "config": {
         "update.profile.on.first.login": "missing"
+      }
+    },
+    {
+      "id": "4afcef46-a24e-4717-adce-d8de6f07ef06",
+      "alias": "mfa-role-superviseur",
+      "config": {
+        "condUserRole": "superviseur",
+        "negate": "false"
+      }
+    },
+    {
+      "id": "f65fefaa-0d3b-4459-8dca-f4fd6dba3e1e",
+      "alias": "mfa-role-administrateur",
+      "config": {
+        "condUserRole": "administrateur",
+        "negate": "false"
       }
     }
   ],
@@ -2646,7 +2842,7 @@
       "config": {}
     }
   ],
-  "browserFlow": "browser",
+  "browserFlow": "browser-mfa",
   "registrationFlow": "registration",
   "directGrantFlow": "direct grant",
   "resetCredentialsFlow": "reset credentials",
@@ -2674,5 +2870,100 @@
   },
   "clientPolicies": {
     "policies": []
-  }
+  },
+  "eventsExpiration": 604800,
+  "users": [
+    {
+      "id": "1d272465-2119-46ed-8e6f-a39c42eed290",
+      "username": "operateur1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Olivia",
+      "lastName": "Test",
+      "email": "operateur1@aquaops.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Temp-operateur1-2026!",
+          "temporary": true
+        }
+      ],
+      "realmRoles": [
+        "operateur"
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "fb4d5357-d2ba-4bf8-bb55-029dcf110cd5",
+      "username": "technicien1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Thomas",
+      "lastName": "Test",
+      "email": "technicien1@aquaops.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Temp-technicien1-2026!",
+          "temporary": true
+        }
+      ],
+      "realmRoles": [
+        "technicien"
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "a05942ae-97c7-4cfb-8165-2ec7e78ad899",
+      "username": "superviseur1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Samir",
+      "lastName": "Test",
+      "email": "superviseur1@aquaops.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Temp-superviseur1-2026!",
+          "temporary": true
+        }
+      ],
+      "realmRoles": [
+        "superviseur"
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "22da77f9-15ce-4760-9088-e954acb02286",
+      "username": "admin1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Amina",
+      "lastName": "Test",
+      "email": "admin1@aquaops.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Temp-admin1-2026!",
+          "temporary": true
+        }
+      ],
+      "realmRoles": [
+        "administrateur"
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "538d61b5-6c9d-4bce-8153-9391915b103a",
+      "username": "service-account-aquaops-audit",
+      "enabled": true,
+      "serviceAccountClientId": "aquaops-audit",
+      "realmRoles": [],
+      "clientRoles": {
+        "realm-management": [
+          "view-events"
+        ]
+      }
+    }
+  ]
 }

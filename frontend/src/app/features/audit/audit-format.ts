@@ -10,6 +10,9 @@ const ACTIONS: Record<string, string> = {
   INCIDENT_STATUS_CHANGED: "Statut de l'incident modifié",
   INCIDENT_RESOLVED: 'Incident résolu',
   INCIDENT_CLOSED: 'Incident clos',
+  LOGIN: 'Connexion',
+  LOGIN_ERROR: 'Échec de connexion',
+  LOGOUT: 'Déconnexion',
 };
 
 const ENTITIES: Record<string, string> = {
@@ -20,6 +23,7 @@ const ENTITIES: Record<string, string> = {
   SENSOR: 'Capteur',
   INTERVENTION: 'Intervention',
   INCIDENT: 'Incident',
+  USER: 'Utilisateur',
 };
 
 /** Libellé français d'une action ; une valeur inconnue s'affiche telle quelle (jamais d'erreur). */

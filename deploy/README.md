@@ -117,13 +117,12 @@ celles des `application.yml` des services. `docker compose up -d` marche tel que
 
 ## À savoir
 
-- **Utilisateurs de test Keycloak : à créer à la main.** L'export
-  `docs/keycloak/aquaops-realm.json` contient le realm, ses clients et ses rôles,
-  mais **aucun utilisateur**. Après le premier `up -d`, se connecter à
+- **Utilisateurs de test Keycloak.** L'export `docs/keycloak/aquaops-realm.json` contient le
+  realm, ses clients, ses rôles et 4 utilisateurs de test (`admin1`, `superviseur1`, `operateur1`,
+  `technicien1`, mots de passe temporaires : voir `docs/keycloak/README.md`). Console :
   http://localhost:8180/admin (identifiant `admin`, mot de passe `admin` par défaut,
-  modifiables avec `KEYCLOAK_ADMIN` et `KEYCLOAK_ADMIN_PASSWORD`), choisir le realm
-  `aquaops`, puis *Users > Add user*, avec un mot de passe dans l'onglet
-  *Credentials* et les rôles dans *Role mapping*.
+  modifiables avec `KEYCLOAK_ADMIN` et `KEYCLOAK_ADMIN_PASSWORD`). Un utilisateur créé à la main
+  dans la console est perdu au prochain `down` : l'ajouter au fichier du realm.
 - **Keycloak perd ses utilisateurs après un `down`** : voir « Au quotidien » plus haut.
 - **Kafka perd ses messages après un `down`.** Il n'a pas de volume nommé : ses
   topics et leurs messages sont stockés dans le conteneur, que `docker compose down`
@@ -325,7 +324,7 @@ déploiements simultanés.
 | --- | --- | --- |
 | **PostgreSQL** | Dans Docker sur la VM (`compose.infra.yml`, volume `aquaops-test_pgdata`, 4 bases créées au premier démarrage) **ou** serveur existant (`DB_HOST`). Sauvegarde du volume ? | Administrateur + E5 |
 | **Kafka** | Dans Docker (`kafka:9092`, volume `aquaops-test_kafkadata`, topics créés automatiquement) **ou** broker existant (`KAFKA_BOOTSTRAP_SERVERS`). | Administrateur + E5 |
-| **Keycloak** | `compose.infra.yml` le lance en mode `start-dev` : **test uniquement** (HTTP, base interne). Le realm est importé depuis `docs/keycloak/`, mais les **utilisateurs créés à la main sont perdus** quand le conteneur est recréé. | E2 + administrateur |
+| **Keycloak** | `compose.infra.yml` le lance en mode `start-dev` : **test uniquement** (HTTP, base interne). Le realm (avec ses 4 utilisateurs de test) est importé depuis `docs/keycloak/` ; `KEYCLOAK_AUDIT_CLIENT_SECRET` est obligatoire. Les **utilisateurs créés à la main sont perdus** quand le conteneur est recréé. | E2 + administrateur |
 | **Exposition de la gateway** | Par défaut `127.0.0.1:8080` : accessible seulement depuis la VM. Pour la démo, deux possibilités : **tunnel SSH** (rien à ouvrir) **ou** `GATEWAY_BIND` sur une interface réseau + règle de pare-feu limitée aux adresses autorisées. | Administrateur |
 | **Issuer Keycloak** | `KEYCLOAK_ISSUER_URI` doit être **identique** à l'`iss` des jetons. Ce champ dépend de l'adresse à laquelle le **navigateur** joint Keycloak. Si le navigateur passe par `http://localhost:8180` (tunnel) alors que les services utilisent `http://keycloak:8180`, les jetons sont refusés (401). Il faut fixer une seule adresse publique de Keycloak, joignable par le navigateur **et** par les conteneurs. | **E2** |
 | **Redirect URIs du frontend** | Le client `aquaops-frontend` n'autorise aujourd'hui que `http://localhost:4200/*`. Il faudra ajouter l'adresse du frontend sur la VM. Le frontend n'est pas encore dans `deploy/test/compose.yml`. | **E2** (+ E4 pour le frontend) |

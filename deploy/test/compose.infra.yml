@@ -71,6 +71,8 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?KEYCLOAK_ADMIN is required, see deploy/test/.env.example}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required, see deploy/test/.env.example}
       KC_HEALTH_ENABLED: "true"       # /health/ready on the management port 9000
+      # Read by the realm import (client "aquaops-audit"): without it the secret would be the literal placeholder.
+      KEYCLOAK_AUDIT_CLIENT_SECRET: ${KEYCLOAK_AUDIT_CLIENT_SECRET:?KEYCLOAK_AUDIT_CLIENT_SECRET is required, see deploy/test/.env.example}
     volumes:
       - ../../docs/keycloak:/opt/keycloak/data/import:ro   # realm export (E2), read only
     networks: [backend]
@@ -93,6 +95,11 @@ services:
       postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
   assets:
+    environment:
+      # Login audit (FR-24): assets-service copies Keycloak login events into audit_log.
+      AUDIT_KEYCLOAK_ENABLED: "true"
+      KEYCLOAK_BASE_URL: http://keycloak:8180
+      KEYCLOAK_AUDIT_CLIENT_SECRET: ${KEYCLOAK_AUDIT_CLIENT_SECRET:?KEYCLOAK_AUDIT_CLIENT_SECRET is required, see deploy/test/.env.example}
     depends_on:
       postgres: { condition: service_healthy }
       keycloak: { condition: service_healthy }
