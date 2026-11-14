@@ -1,0 +1,67 @@
+<div class="overflow-x-auto">
+  <table class="w-full border-collapse text-left" [attr.aria-label]="'Liste des actifs'">
+    <thead class="bg-surface-container-low">
+      <tr>
+        @for (col of columns(); track col.key) {
+          <th scope="col" [attr.aria-sort]="ariaSort(col.key)" class="whitespace-nowrap px-space-xl py-space-md {{ col.numeric ? 'text-right' : '' }}">
+            <button type="button" [attr.data-sort]="col.key" (click)="sortChange.emit(col.key)"
+              class="inline-flex items-center gap-space-2xs font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary transition-colors hover:text-primary">
+              {{ col.label }}
+              <span class="material-symbols-outlined text-[16px] {{ ariaSort(col.key) === 'none' ? 'opacity-40' : 'text-primary' }}">{{ sortIcon(col.key) }}</span>
+            </button>
+          </th>
+        }
+        <th scope="col" class="px-space-xl py-space-md text-right"><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.id) {
+        <tr [attr.data-row]="row.id" tabindex="0" (click)="view.emit(row)" (keydown.enter)="rowKey($event, row)"
+          class="cursor-pointer border-t border-outline-variant/30 transition-colors hover:bg-surface-container-low focus-visible:bg-surface-container-low focus-visible:outline-none">
+          @for (col of columns(); track col.key) {
+            <td class="px-space-xl py-space-md {{ col.numeric ? 'text-right' : '' }}" [attr.data-col]="col.key">
+              @switch (true) {
+                @case (col.key === 'id') {
+                  <span class="font-mono-telemetry text-mono-telemetry text-secondary">#{{ row.id }}</span>
+                }
+                @case (col.key === 'name') {
+                  <span class="font-label-md text-label-md font-semibold text-on-surface">{{ row.name }}</span>
+                }
+                @case (col.key === 'type') {
+                  <span class="rounded-full px-space-sm py-space-2xs font-label-sm text-label-sm font-semibold {{ typeClass(row) }}">{{ text(row.cells[col.key]) }}</span>
+                }
+                @case (isCount(col.key)) {
+                  <span class="inline-flex min-w-7 justify-center rounded-full px-space-sm py-space-2xs font-label-sm text-label-sm font-bold {{ row.cells[col.key] ? 'bg-primary-fixed text-on-primary-fixed-variant' : 'bg-surface-container text-secondary' }}">{{ row.cells[col.key] }}</span>
+                }
+                @default {
+                  <span class="font-body-md text-body-md {{ col.numeric ? 'font-mono-telemetry text-mono-telemetry' : '' }} text-on-surface-variant">{{ text(row.cells[col.key]) }}</span>
+                }
+              }
+            </td>
+          }
+          <td class="whitespace-nowrap px-space-xl py-space-md text-right">
+            <div class="inline-flex items-center gap-space-2xs">
+              <button type="button" data-action="view" title="Voir la fiche" aria-label="Voir la fiche de {{ row.name }}"
+                (click)="$event.stopPropagation(); view.emit(row)"
+                class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary">
+                <span class="material-symbols-outlined text-[20px]">visibility</span>
+              </button>
+              @if (canWrite()) {
+                <button type="button" data-action="edit" title="Modifier" aria-label="Modifier {{ row.name }}"
+                  (click)="$event.stopPropagation(); edit.emit(row)"
+                  class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary">
+                  <span class="material-symbols-outlined text-[20px]">edit</span>
+                </button>
+                <button type="button" data-action="delete" title="Supprimer" aria-label="Supprimer {{ row.name }}"
+                  (click)="$event.stopPropagation(); remove.emit(row)"
+                  class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-error-container hover:text-error">
+                  <span class="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+              }
+            </div>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
