@@ -155,6 +155,9 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Secret du client "aquaops-audit" du realm (lecture des evenements de connexion).
+      # OBLIGATOIRE : le realm contient ${KEYCLOAK_AUDIT_CLIENT_SECRET}, sans valeur le secret resterait ce texte.
+      KEYCLOAK_AUDIT_CLIENT_SECRET: ${KEYCLOAK_AUDIT_CLIENT_SECRET:-local-dev-only}
 
     ports:
       - "8180:8180"

@@ -6,7 +6,7 @@ export interface AuditEntry {
   /** Qui : nom d'utilisateur Keycloak, ou « system ». */
   actor: string;
   actorRole: string | null;
-  /** Quoi : CREATE, UPDATE, DELETE, ASSIGN, STATUS_CHANGE, ou un type d'événement d'incident. */
+  /** Quoi : CREATE, UPDATE, DELETE, ASSIGN, STATUS_CHANGE, ou un type d'événement d'incident, ou LOGIN, LOGIN_ERROR, LOGOUT (connexions). */
   action: string;
   /** Objet touché : ZONE, PIPE, TANK, PUMP, SENSOR, INTERVENTION, INCIDENT. */
   entityType: string;
