@@ -86,9 +86,10 @@ readonly SAFE_PATH=$SB/mocks:/usr/local/bin:/usr/bin:/bin" '
     !skip' "$WRAPPER_SRC" | tr -d '\r' > "$W"
 chmod 755 "$W"
 
-# Local "GitHub", real deploy files and the real publish.yml:
-#   main: C0 (policy as shipped: off) -> CP (policy partly on) -> C1 (policy
-#         on) -> C2 (policy on, stub deploy-test.sh)
+# Local "GitHub", real deploy files and the real publish.yml, whose three
+# switches each test commit sets itself (whatever the repository has today):
+#   main: C0 (policy off: off/off/'0') -> CP (partly on: on/on/'0') ->
+#         C1 (on: on/on/'1') -> C2 (on, stub deploy-test.sh)
 #   branch "feature": C1 -> CX, never merged.
 G() { git -C "$SB/src" -c user.name=test -c user.email=test@example.invalid "$@"; }
 git init --quiet -b main "$SB/src"
@@ -99,17 +100,21 @@ done
 mkdir -p "$SB/src/deploy/integration" "$SB/src/docs"
 cp -r "$REPO/deploy/integration/postgres-init" "$SB/src/deploy/integration/"
 cp -r "$REPO/docs/keycloak" "$SB/src/docs/"
+PUB="$SB/src/.github/workflows/publish.yml"
+set_policy() {   # set_policy <DEPLOY_TEST> <GHCR_PUBLISH> <TRIVY_EXIT_CODE>
+    sed -i -E "s/^  DEPLOY_TEST: '[a-z-]+'\$/  DEPLOY_TEST: '$1'/; s/^  GHCR_PUBLISH: '[a-z-]+'\$/  GHCR_PUBLISH: '$2'/; s/^  TRIVY_EXIT_CODE: '[01]'\$/  TRIVY_EXIT_CODE: '$3'/" "$PUB"
+    [ "$(grep -cxE "  (DEPLOY_TEST: '$1'|GHCR_PUBLISH: '$2'|TRIVY_EXIT_CODE: '$3')" "$PUB")" = 3 ] \
+        || { echo "SETUP ERROR: the three switches of publish.yml were not found"; exit 1; }
+}
+set_policy off off 0
 echo zero > "$SB/src/docs/keycloak/marker"
 G add -A && G commit --quiet -m C0
 C0="$(G rev-parse HEAD)"
-PUB="$SB/src/.github/workflows/publish.yml"
-sed -i "s/^  DEPLOY_TEST: 'off'\$/  DEPLOY_TEST: 'on'/; s/^  GHCR_PUBLISH: 'off'\$/  GHCR_PUBLISH: 'on'/" "$PUB"
+set_policy on on 0
 echo partial > "$SB/src/docs/keycloak/marker"
 G commit --quiet -am CP
 CP="$(G rev-parse HEAD)"
-sed -i "s/^  TRIVY_EXIT_CODE: '0'\$/  TRIVY_EXIT_CODE: '1'/" "$PUB"
-[ "$(grep -cE "^  (DEPLOY_TEST: 'on'|GHCR_PUBLISH: 'on'|TRIVY_EXIT_CODE: '1')\$" "$PUB")" = 3 ] \
-    || { echo "SETUP ERROR: the switches of publish.yml were not found"; exit 1; }
+set_policy on on 1
 echo one > "$SB/src/docs/keycloak/marker"
 G commit --quiet -am C1
 C1="$(G rev-parse HEAD)"
@@ -217,7 +222,7 @@ stub_idle "deploy-test.sh never ran for an unauthorised commit"
 
 # =============================================================================
 section "3b. The deployment policy committed in THAT commit must be on"
-run "$GOOD_STDIN" "$C0" 1;   expect_rc 2 "commit of main with the policy off (as shipped today)"
+run "$GOOD_STDIN" "$C0" 1;   expect_rc 2 "commit of main with the policy off"
 expect_out "policy of $C0 does not allow" "  clear message"
 stub_idle "  nothing deployed"
 run "$GOOD_STDIN" "$CP" 1;   expect_rc 2 "policy partly on (Trivy still audit-only)"

@@ -148,8 +148,9 @@ de test. Elle s'adresse à l'équipe **et à l'administrateur de la VM**.
 >   **désactivé** (`DEPLOY_TEST: 'off'`) : il n'a jamais été exécuté. Il passe
 >   par le wrapper `aquaops-deploy` (§ 7), à installer par l'administrateur ;
 > - la **publication GHCR est désactivée** (`GHCR_PUBLISH: 'off'` dans
->   `.github/workflows/publish.yml`) et Trivy est en **mode audit**
->   (`TRIVY_EXIT_CODE: '0'`, décision de E4 en attente) ;
+>   `.github/workflows/publish.yml`). Trivy est **bloquant** depuis SCRUM-63
+>   (`TRIVY_EXIT_CODE: '1'`, PR #102 de E4) : c'est la condition préalable à
+>   l'activation de GHCR puis du déploiement ;
 > - un premier déploiement **manuel** a été réalisé par E5 sur la VM Ubuntu de
 >   test (services sains, smoke test de la gateway passé) ; il ne remplace pas
 >   la preuve du déploiement automatique (NFR-08).
