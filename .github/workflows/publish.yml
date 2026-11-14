@@ -522,7 +522,10 @@ jobs:
   # workflow has no pull_request trigger, and the condition repeats it.
   # Labels, conditions and the environment reduce mistakes; they are not a
   # security boundary on their own (deploy/README.md, runner section).
-  # All deployment commands live in deploy/scripts/deploy-test.sh.
+  # The runner account has no Docker access: it only asks the wrapper the VM
+  # administrator installed (deploy/vm/aquaops-deploy, one sudoers rule) to
+  # deploy this commit. All deployment commands live in that wrapper and in
+  # deploy/scripts/deploy-test.sh, which it runs.
   # ---------------------------------------------------------------------------
   deploy-test:
     name: Deploy to test VM
@@ -547,7 +550,7 @@ jobs:
       packages: read
     steps:
       # Defence in depth: same rules as publish-policy, checked again on the VM
-      # side before anything is checked out or pulled.
+      # side before the deployment is requested.
       - name: Check activation rules
         env:
           SHA: ${{ github.sha }}
@@ -558,26 +561,23 @@ jobs:
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::not a full commit SHA: $SHA"; exit 1; }
           echo "Deploying $SHA"
 
-      # Scripts and compose files of the same commit as the images.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      # deploy-test.sh: checks, temporary GHCR login (token on stdin, private
-      # Docker config, logout), exact pull, up without build, wait-healthy
-      # (health + exact image), gateway smoke test, push-to-healthy time with
-      # the 1200 s NFR-08 budget in the job summary. Passwords stay in
-      # /etc/aquaops/test.env on the VM; nothing secret is printed.
-      - name: Deploy and verify (deploy/scripts/deploy-test.sh)
+      # No checkout: the runner's workspace is never used for the deployment.
+      # The wrapper (as aquaops-deploy) refuses a commit that is not on main or
+      # whose publish.yml does not set the three switches above to 'on'/'on'/'1',
+      # exports that commit's deploy files to its own folder and runs its
+      # deploy-test.sh with fixed settings (/etc/aquaops/test.env, project
+      # aquaops-test, compose.infra.yml): temporary GHCR login, exact pull,
+      # up without build, wait-healthy (health + exact image), gateway smoke
+      # test, push-to-healthy time against the 1200 s NFR-08 budget.
+      # The job token (contents: read for the fetch of main, packages: read for
+      # the pull) goes through stdin only: never on a command line or on disk.
+      - name: Deploy and verify (aquaops-deploy wrapper)
         env:
           IMAGE_TAG: ${{ github.sha }}
-          AQUAOPS_ENV_FILE: /etc/aquaops/test.env
-          # 'true': PostgreSQL, Kafka and Keycloak in Docker on the VM
-          # (compose.infra.yml). Decision to confirm with the VM administrator.
-          AQUAOPS_WITH_INFRA: 'true'
-          GHCR_USERNAME: ${{ github.actor }}
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Epoch seconds of the push to main: start of the NFR-08 measurement.
           PUSHED_AT: ${{ github.event.repository.pushed_at }}
-        run: bash deploy/scripts/deploy-test.sh
+          GHCR_USERNAME: ${{ github.actor }}
+          DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s\n%s\n' "$DEPLOY_TOKEN" "$GHCR_USERNAME" \
+            | sudo -n -u aquaops-deploy /usr/local/sbin/aquaops-deploy "$IMAGE_TAG" "$PUSHED_AT"

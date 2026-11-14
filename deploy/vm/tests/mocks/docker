@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Test double of "docker" for deploy/vm/tests: records every call, never
+# talks to a daemon or a registry. aquaops-deploy wipes the environment, so
+# the behaviour comes from mock.conf next to this file (written by the test).
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+log="$MOCK_LOG"
+token_seen=no
+env | grep -qF "$MOCK_TOKEN" && token_seen=yes
+printf 'CALL docker %s | IMAGE_TAG=%s token_in_env=%s\n' "$*" "${IMAGE_TAG:-<unset>}" "$token_seen" >> "$log"
+case " $* " in *"$MOCK_TOKEN"*) echo "TOKEN-IN-ARGV docker" >> "$log" ;; esac
+
+SERVICES="gateway telemetry assets detection incidents notifications simulator"
+case "$1" in
+  version)
+    [ "${MOCK_DAEMON:-up}" = up ] || { echo "Cannot connect to the Docker daemon" >&2; exit 1; }
+    echo "27.3.1"; exit 0 ;;
+  context) echo "unix:///var/run/docker.sock"; exit 0 ;;
+  ps)
+    case "$*" in
+      *'{{.Ports}}'*) [ -z "${MOCK_HOST_PS:-}" ] || printf '%b\n' "$MOCK_HOST_PS"; exit 0 ;;
+      *'{{.State}}'*) [ -z "${MOCK_PROJECT_PS:-}" ] || printf '%b\n' "$MOCK_PROJECT_PS"; exit 0 ;;
+      *' -aq '*|*'-aq'*) for s in $SERVICES; do echo "id-$s"; done; exit 0 ;;
+      *) [ -z "${MOCK_CURRENT_IMAGE:-}" ] || echo "$MOCK_CURRENT_IMAGE"; exit 0 ;;
+    esac ;;
+  inspect)
+    for s in $SERVICES; do echo "$s ${IMAGE_NAMESPACE}/$s:${IMAGE_TAG} running healthy 0 0"; done; exit 0 ;;
+  logs) echo "mock log line"; exit 0 ;;
+  login)
+    stdin="$(cat)"
+    if [ "$stdin" = "$MOCK_TOKEN" ]; then echo "LOGIN stdin=token-ok" >> "$log"; else echo "LOGIN stdin=MISMATCH" >> "$log"; fi
+    mkdir -p "$DOCKER_CONFIG"; echo '{}' > "$DOCKER_CONFIG/config.json"
+    exit 0 ;;
+  logout) echo "LOGOUT $2" >> "$log"; exit 0 ;;
+  compose) ;;
+  *) echo "mock docker: unexpected command $1" >&2; exit 99 ;;
+esac
+
+shift
+if [ "$1" = version ]; then echo "2.29.7"; exit 0; fi
+while [ $# -gt 0 ]; do
+  case "$1" in -p|-f|--env-file) shift 2 ;; *) break ;; esac
+done
+case "$1" in
+  config)
+    if [ "${2:-}" = --quiet ]; then
+      [ "${MOCK_CONFIG:-ok}" = ok ] || { echo "required variable DB_HOST is missing a value" >&2; exit 15; }
+      exit 0
+    fi
+    if [ "${2:-}" = --images ]; then
+      for s in $SERVICES; do echo "ghcr.io/fatii-elb/aquaops/$s:${IMAGE_TAG}"; done; exit 0
+    fi
+    # Full resolved config (deploy-test.sh keeps it in memory, never prints it).
+    printf 'services:\n  gateway:\n    environment:\n      DB_PASSWORD: mock-resolved-password\n'; exit 0 ;;
+  pull) exit 0 ;;
+  up)   exit 0 ;;
+  port) echo "127.0.0.1:8080"; exit 0 ;;
+  *) echo "mock compose: unexpected $1" >&2; exit 99 ;;
+esac

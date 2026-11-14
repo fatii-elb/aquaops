@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Test double of "git" for deploy/vm/tests: records the command line (to prove
+# the token never appears in it), then runs the real git.
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+echo "CALL git $*" >> "$MOCK_LOG"
+case " $* " in *"$MOCK_TOKEN"*|*"$MOCK_TOKEN_B64"*) echo "TOKEN-IN-ARGV git" >> "$MOCK_LOG" ;; esac
+exec /usr/bin/git "$@"

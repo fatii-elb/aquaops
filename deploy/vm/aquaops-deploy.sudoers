@@ -1,0 +1,37 @@
+# AquaOps: the ONLY sudo right of the GitHub Actions runner account.
+# Card SCRUM-55 / NFR-08 · E5. Installation and checks: deploy/README.md § 7.
+#
+# Installed by the VM administrator as /etc/sudoers.d/aquaops-deploy
+# (root:root, mode 440), after "visudo -cf" on this file.
+#
+# aquaops-runner may run /usr/local/sbin/aquaops-deploy as aquaops-deploy,
+# without password, with exactly "<40-hex SHA> <digits>". Nothing else: no
+# other command, no other target user (not root), no target group, no "check"
+# mode, no environment variable (no SETENV tag, env_reset stays on).
+# The wrapper validates everything again: it is the real boundary. This rule
+# only narrows what may reach it.
+#
+# REQUIRES THE TRADITIONAL SUDO, version 1.9.10 or later (regular expressions
+# in command arguments). Validated with visudo 1.9.17p2; Ubuntu 24.04 ships
+# 1.9.15. Check with:  sudo -V | head -n 1
+#
+# NOT COMPATIBLE WITH SUDO-RS (default sudo of Ubuntu 25.10 and later): its
+# visudo rejects both active lines below ("regular expressions are not
+# supported", "unknown setting: 'log_input'"), so this file cannot be installed
+# there by mistake. With sudo-rs, replace BOTH active lines with the commented
+# rule at the end: every argument then reaches the wrapper, which refuses all
+# but "<sha> <digits>" (sudo-rs has no I/O logging, so no Defaults line).
+#
+# sudo matches the regular expression against all the arguments joined by
+# spaces: "<sha> <digits>" given as ONE argument also matches; the wrapper
+# accepts exactly two separate arguments, so that case is refused there.
+#
+# The token arrives on stdin: never record stdin (or output) of this command,
+# even if I/O logging is enabled elsewhere. sudo still logs the command line
+# (SHA and push time only: nothing secret).
+
+Defaults!/usr/local/sbin/aquaops-deploy !log_input, !log_output
+aquaops-runner ALL=(aquaops-deploy) NOPASSWD: /usr/local/sbin/aquaops-deploy ^[0-9a-f]{40} [0-9]+$
+
+# sudo-rs only (replace BOTH lines above with this one):
+# aquaops-runner ALL=(aquaops-deploy) NOPASSWD: /usr/local/sbin/aquaops-deploy
