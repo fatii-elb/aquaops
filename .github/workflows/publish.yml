@@ -2,9 +2,10 @@
 # AquaOps image pipeline on main: test the exact commit, then build the images.
 # Card SCRUM-55 / NFR-08 · E5
 #
-# Publication to GHCR is prepared but OFF (GHCR_PUBLISH below). It can only be
-# switched "on" once Trivy blocks CRITICAL vulnerabilities (TRIVY_EXIT_CODE
-# '1', decision of E4): the "publish-policy" job refuses otherwise.
+# Publication to GHCR and deployment to the test VM are ON (GHCR_PUBLISH and
+# DEPLOY_TEST below). Both require Trivy to block CRITICAL vulnerabilities
+# (TRIVY_EXIT_CODE '1', decision of E4): the "publish-policy" job refuses
+# otherwise, and so does the deployment wrapper on the VM.
 #
 #   push to main (commit S)
 #     ci           the CI workflow (ci.yml) on S: Java, PostgreSQL, Angular
@@ -22,14 +23,14 @@
 #                  succeeded: reloads the 8 SCANNED images (no rebuild), checks
 #                  they are identical, then (mode "on") pushes them with their
 #                  full-SHA tag. The only job with packages: write.
-#     deploy-test  OFF (DEPLOY_TEST below). Only after "Images result" and a
-#                  real publication ("on"), on the self-hosted runner of the
-#                  test VM: runs deploy/scripts/deploy-test.sh for this exact
-#                  commit (pull, up, wait-healthy, smoke test, NFR-08 time).
+#     deploy-test  only after "Images result" and a real publication ("on"),
+#                  on the self-hosted runner of the test VM: asks the wrapper
+#                  deploy/vm/aquaops-deploy to deploy this exact commit (pull,
+#                  up, wait-healthy, smoke test, NFR-08 time).
 #
 # Trivy (SCRUM-63 / NFR-16, E4): each image is loaded into the job and scanned
-# before anything could be pushed. AUDIT MODE for now (TRIVY_EXIT_CODE below):
-# reports only, no failure.
+# before anything could be pushed. BLOCKING (TRIVY_EXIT_CODE '1'): a fixable
+# CRITICAL vulnerability fails the build; HIGH is reported only.
 # Accepted exceptions: deploy/trivy/.trivyignore (one line + reason each).
 # Actions are pinned to a commit SHA; the comment gives the release tag.
 # =============================================================================
@@ -50,29 +51,30 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Future registry path (lowercase, as GHCR requires). Only used as a local
-  # tag while push is false.
+  # Registry path (lowercase, as GHCR requires). Images are pushed there only by
+  # the publish job, with their full-SHA tag.
   IMAGE_NAMESPACE: ghcr.io/fatii-elb/aquaops
   # Trivy mode (SCRUM-63): '0' = audit, reports only, never blocks the pipeline;
   # '1' = enforce, a CRITICAL vulnerability fails the job (NFR-16 target).
   # Switch to '1' once the images are clean.
   TRIVY_EXIT_CODE: '1'
   # GHCR publication (SCRUM-55 / NFR-08, E5):
-  #   'off'     nothing is exported or published (current setting)
+  #   'off'     nothing is exported or published
   #   'dry-run' the 8 scanned images go through the whole publish path
   #             (export, reload, identity check) WITHOUT any registry login
   #             or push: measures the extra time, publishes nothing
-  #   'on'      the same, then pushes ghcr.io/...:<full SHA>. Refused while
-  #             TRIVY_EXIT_CODE is not '1'. Never a "latest" tag.
-  GHCR_PUBLISH: 'off'
+  #   'on'      the same, then pushes ghcr.io/...:<full SHA> (current setting).
+  #             Refused while TRIVY_EXIT_CODE is not '1'. Never a "latest" tag.
+  GHCR_PUBLISH: 'on'
   # Automatic deployment to the test VM (SCRUM-55 / NFR-08, E5):
-  #   'off'  no deployment job runs (current setting)
-  #   'on'   after every successful pipeline on main, deploy this commit with
-  #          deploy/scripts/deploy-test.sh on the runner labelled aquaops-test.
+  #   'off'  no deployment job runs (emergency stop: set back to 'off')
+  #   'on'   after every successful pipeline on main, deploy this commit through
+  #          the wrapper on the runner labelled aquaops-test (current setting).
   #          Refused unless GHCR_PUBLISH is 'on' (which itself requires
   #          TRIVY_EXIT_CODE '1'): only blocked-and-published images are deployed.
-  # Needs first: the runner registered and the VM prepared (deploy/README.md).
-  DEPLOY_TEST: 'off'
+  #          The wrapper reads these three lines in the commit it deploys.
+  # Needs: the runner and the VM prepared (deploy/README.md § 7).
+  DEPLOY_TEST: 'on'
 
 jobs:
 

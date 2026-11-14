@@ -141,19 +141,20 @@ celles des `application.yml` des services. `docker compose up -d` marche tel que
 Carte SCRUM-55 · E5. Cette section prépare le déploiement automatique sur la VM
 de test. Elle s'adresse à l'équipe **et à l'administrateur de la VM**.
 
-> **État actuel — le déploiement automatique n'est pas encore en service :**
+> **État actuel — déploiement automatique activé (SCRUM-55) :**
 > - un runner auto-hébergé (`aquaops-vm-test`, label `aquaops-test`, compte
 >   `aquaops-runner` sans `sudo` ni groupe `docker`) est enregistré sur la VM ;
-> - le job `deploy-test` existe dans `.github/workflows/publish.yml` mais il est
->   **désactivé** (`DEPLOY_TEST: 'off'`) : il n'a jamais été exécuté. Il passe
->   par le wrapper `aquaops-deploy` (§ 7), à installer par l'administrateur ;
-> - la **publication GHCR est désactivée** (`GHCR_PUBLISH: 'off'` dans
->   `.github/workflows/publish.yml`). Trivy est **bloquant** depuis SCRUM-63
->   (`TRIVY_EXIT_CODE: '1'`, PR #102 de E4) : c'est la condition préalable à
->   l'activation de GHCR puis du déploiement ;
-> - un premier déploiement **manuel** a été réalisé par E5 sur la VM Ubuntu de
->   test (services sains, smoke test de la gateway passé) ; il ne remplace pas
->   la preuve du déploiement automatique (NFR-08).
+>   le wrapper `aquaops-deploy` (§ 7) y est installé et son mode `check` a réussi ;
+> - dans `.github/workflows/publish.yml` : Trivy **bloquant**
+>   (`TRIVY_EXIT_CODE: '1'`, PR #102 de E4), **publication GHCR**
+>   (`GHCR_PUBLISH: 'on'`) et **déploiement automatique** (`DEPLOY_TEST: 'on'`) :
+>   chaque push sur `main` qui passe CI, Gitleaks et Trivy est publié puis
+>   déployé sur la VM ;
+> - **arrêt d'urgence** : remettre `DEPLOY_TEST: 'off'` sur `main` (le wrapper
+>   refuse aussi tout commit dont le `publish.yml` ne l'active pas), ou
+>   supprimer `/etc/sudoers.d/aquaops-deploy` sur la VM ;
+> - la preuve NFR-08 (moins de 20 minutes entre le push et l'application saine)
+>   est le journal du premier run réussi du job « Deploy to test VM ».
 >
 > **Eureka : intégration partielle, à coordonner dans l'équipe.**
 > - assets-service contient le **client** Eureka
