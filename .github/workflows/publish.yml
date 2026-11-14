@@ -56,7 +56,7 @@ env:
   # Trivy mode (SCRUM-63): '0' = audit, reports only, never blocks the pipeline;
   # '1' = enforce, a CRITICAL vulnerability fails the job (NFR-16 target).
   # Switch to '1' once the images are clean.
-  TRIVY_EXIT_CODE: '0'
+  TRIVY_EXIT_CODE: '1'
   # GHCR publication (SCRUM-55 / NFR-08, E5):
   #   'off'     nothing is exported or published (current setting)
   #   'dry-run' the 8 scanned images go through the whole publish path
