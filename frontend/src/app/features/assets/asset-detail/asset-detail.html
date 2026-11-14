@@ -1,0 +1,94 @@
+<div class="fixed inset-0 z-[60] flex justify-end">
+  <div class="absolute inset-0 bg-inverse-surface/40 backdrop-blur-[2px]" (click)="closed.emit()" aria-hidden="true"></div>
+  <aside role="dialog" aria-modal="true" aria-labelledby="detail-title" data-testid="asset-detail"
+    class="relative flex h-full w-full max-w-md flex-col bg-surface-container-lowest shadow-2xl">
+    <header class="flex items-start justify-between gap-space-md bg-surface-container-low px-space-2xl py-space-xl">
+      <div class="flex min-w-0 items-center gap-space-md">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary shadow-sm">
+          <span class="material-symbols-outlined text-[24px]">{{ meta().icon }}</span>
+        </span>
+        <div class="min-w-0">
+          <p class="font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">{{ meta().singular }} #{{ id() }}</p>
+          <h2 id="detail-title" class="truncate font-headline-md text-headline-md text-on-surface">{{ item()?.name }}</h2>
+        </div>
+      </div>
+      <button type="button" data-testid="close-detail" (click)="closed.emit()" aria-label="Fermer la fiche"
+        class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface">
+        <span class="material-symbols-outlined text-[22px]">close</span>
+      </button>
+    </header>
+
+    <div class="flex flex-1 flex-col gap-space-xl overflow-y-auto px-space-2xl py-space-xl">
+      <section aria-label="Propriétés">
+        <h3 class="mb-space-sm font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">Propriétés</h3>
+        <dl class="grid grid-cols-2 gap-x-space-lg gap-y-space-md rounded-xl bg-surface-container-low p-space-lg">
+          @for (field of fields(); track field.label) {
+            <div class="flex flex-col gap-space-2xs">
+              <dt class="font-label-sm text-label-sm text-secondary">{{ field.label }}</dt>
+              <dd class="font-label-md text-label-md font-semibold text-on-surface">{{ text(field.value) }}</dd>
+            </div>
+          }
+        </dl>
+      </section>
+
+      <section aria-label="Relations">
+        <h3 class="mb-space-sm font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">Relations</h3>
+        @for (group of groups(); track group.key) {
+          <div class="mb-space-lg last:mb-0" [attr.data-group]="group.key">
+            <p class="mb-space-xs flex items-center gap-space-xs font-label-md text-label-md font-semibold text-on-surface">
+              <span class="material-symbols-outlined text-[18px] text-primary">{{ group.icon }}</span>
+              {{ group.title }}
+              <span class="rounded-full bg-surface-container px-space-xs font-label-sm text-label-sm text-secondary">{{ group.items.length }}</span>
+            </p>
+            <ul class="flex flex-col gap-space-xs">
+              @for (entry of group.items; track $index) {
+                <li class="rounded-lg bg-surface-container-low px-space-md py-space-sm">
+                  @if (entry.ref; as ref) {
+                    <button type="button" [attr.data-ref]="ref.category + ':' + ref.id" (click)="openRef.emit(ref)"
+                      class="flex w-full items-center justify-between gap-space-sm text-left font-label-md text-label-md font-medium text-primary hover:underline">
+                      <span class="truncate">{{ entry.label }}</span>
+                      <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                    </button>
+                  } @else {
+                    <span class="flex items-center gap-space-xs font-label-md text-label-md text-error">
+                      <span class="material-symbols-outlined text-[16px]">link_off</span>{{ entry.label }}
+                    </span>
+                  }
+                  @if (entry.children.length > 0) {
+                    <ul class="mt-space-xs flex flex-wrap gap-space-xs border-l-2 border-primary-fixed-dim pl-space-md">
+                      @for (child of entry.children; track child.id) {
+                        <li>
+                          <button type="button" [attr.data-ref]="child.category + ':' + child.id" (click)="openRef.emit(child)"
+                            class="flex items-center gap-space-2xs rounded-full bg-surface-container-lowest px-space-sm py-space-2xs font-label-sm text-label-sm text-primary shadow-sm transition-colors hover:bg-primary-fixed">
+                            <span class="material-symbols-outlined text-[14px]">{{ icon(child) }}</span>{{ child.name }}
+                          </button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        } @empty {
+          <p class="rounded-lg bg-surface-container-low px-space-md py-space-md font-body-md text-body-md text-on-surface-variant" data-testid="no-relations">
+            Aucun équipement ni capteur n'est rattaché à cet élément.
+          </p>
+        }
+      </section>
+    </div>
+
+    @if (canWrite()) {
+      <footer class="flex justify-end gap-space-sm bg-surface-container-low px-space-2xl py-space-lg">
+        <button type="button" data-testid="detail-delete" (click)="remove.emit()"
+          class="flex items-center gap-space-xs rounded-lg bg-surface-container-lowest px-space-md py-space-sm font-label-md text-label-md text-error shadow-sm transition-colors hover:bg-error-container">
+          <span class="material-symbols-outlined text-[18px]">delete</span>Supprimer
+        </button>
+        <button type="button" data-testid="detail-edit" (click)="edit.emit()"
+          class="flex items-center gap-space-xs rounded-lg bg-linear-to-r from-primary to-primary-container px-space-md py-space-sm font-label-md text-label-md text-on-primary shadow-sm transition-all hover:brightness-105 active:scale-[0.98]">
+          <span class="material-symbols-outlined text-[18px]">edit</span>Modifier
+        </button>
+      </footer>
+    }
+  </aside>
+</div>

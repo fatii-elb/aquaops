@@ -31,7 +31,7 @@ export class AppShell {
 
   protected readonly nav: NavItem[] = [
     { key: 'dashboard', icon: 'grid_view', label: 'Tableau de bord', link: '/dashboard' },
-    { key: 'assets', icon: 'hub', label: 'Réseau & Actifs' },
+    { key: 'assets', icon: 'hub', label: 'Réseau & Actifs', link: '/assets' },
     { key: 'telemetry', icon: 'sensors', label: 'Télémétrie & Capteurs' },
     { key: 'alerts', icon: 'warning', label: 'Alertes & Anomalies' },
     { key: 'incidents', icon: 'emergency', label: 'Incidents', link: '/incidents' },
