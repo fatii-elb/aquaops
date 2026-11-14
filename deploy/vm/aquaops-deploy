@@ -114,7 +114,12 @@ TOKEN=""
 ACTOR=""
 IFS= read -r -t 10 TOKEN || true
 IFS= read -r -t 2 ACTOR || true
-if ! [[ "$TOKEN" =~ ^[A-Za-z0-9_]{20,255}$ ]]; then
+# Token alphabet: letters, digits, "_", "." and "-". Since October 2026 the
+# Actions GITHUB_TOKEN is a stateless "ghs_<app id>_<JWT>" token of about 520
+# characters, with dots and dashes; PATs (github_pat_...) stay shorter. No
+# space, quote or shell character: the token only ever goes to environment
+# variables, base64 and awk, never to a command line or a shell evaluation.
+if ! [[ "$TOKEN" =~ ^[A-Za-z0-9_.-]{20,4096}$ ]]; then
     TOKEN=""
     refuse "missing or malformed token on stdin (line 1)"
 fi

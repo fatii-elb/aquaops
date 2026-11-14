@@ -26,7 +26,13 @@ SB="$(mktemp -d "${AQUAOPS_TEST_TMP:-${TMPDIR:-/tmp}}/aquaops-deploy-test.XXXXXX
 trap 'chmod -R u+rwx "$SB" 2> /dev/null; rm -rf "$SB"' EXIT
 ME="$(id -un)"
 # Fake values, low entropy on purpose (not secrets, nothing for Gitleaks).
-TOKEN=FAKEFAKEFAKEFAKEFAKEFAKEFAKE0000
+# Main fake token: same shape as the Actions GITHUB_TOKEN since October 2026
+# ("ghs_<app id>_<JWT>", ~540 characters with "." "-" "_"). Built at run time
+# from repeated letters so that no secret scanner sees a real-looking token.
+rep() { local s=""; for ((i = 0; i < $2; i++)); do s+="$1"; done; printf '%s' "$s"; }
+TOKEN="gh""s_123456_$(rep a 180).$(rep b 180).$(rep 'c-_' 55)"
+LEGACY_TOKEN=FAKEFAKEFAKEFAKEFAKEFAKEFAKE0000                  # old short style
+PAT_TOKEN="github""_pat_$(rep D 22)_$(rep e 59)"                 # fine-grained PAT shape
 TOKEN_B64="$(printf 'x-access-token:%s' "$TOKEN" | base64 -w 0)"
 ACTOR=octo-tester
 GOOD_STDIN="$TOKEN\n$ACTOR\n"
@@ -135,6 +141,7 @@ rc=0; echo_token=no; pause=0
     echo "args=$#"
     env | grep -v '^GHCR_TOKEN=' | sort
     [ "${GHCR_TOKEN:-}" = "" ] && echo "GHCR_TOKEN=<empty>" || echo "GHCR_TOKEN=<set>"
+    echo "GHCR_TOKEN_LENGTH=${#GHCR_TOKEN}"
 } > "$AQUAOPS_STATE_DIR/stub-record"
 [ "$echo_token" = no ] || echo "stub output: token is $GHCR_TOKEN"
 sleep "$pause"
@@ -185,6 +192,11 @@ section "2. Credentials: token and user name on stdin only, fail safe"
 run "" "$C2" 1;                                  expect_rc 2 "empty stdin";  expect_out "malformed token" "  says the token is missing"
 run "short\n$ACTOR\n" "$C2" 1;                   expect_rc 2 "token too short"
 run "FAKE FAKE FAKE FAKE FAKE FAKE\n$ACTOR\n" "$C2" 1; expect_rc 2 "token with spaces"
+run "FAKE\"FAKEFAKEFAKEFAKEFAKE\n$ACTOR\n" "$C2" 1; expect_rc 2 "token with a quote"
+run "FAKE\$(id)FAKEFAKEFAKEFAKEFAKE\n$ACTOR\n" "$C2" 1; expect_rc 2 "token with \$( )"
+run "FAKEFAKE;FAKEFAKEFAKEFAKEFAKE\n$ACTOR\n" "$C2" 1; expect_rc 2 "token with ;"
+run "FAKEFAKE/FAKEFAKEFAKE+FAKE=\n$ACTOR\n" "$C2" 1; expect_rc 2 "token with / + ="
+run "$(rep a 4097)\n$ACTOR\n" "$C2" 1;           expect_rc 2 "token longer than 4096 characters"
 run "$TOKEN" "$C2" 1;                            expect_rc 2 "no user name line"
 run "$TOKEN\nbad user;id\n" "$C2" 1;             expect_rc 2 "user name with shell characters"
 run "$TOKEN\n-leading-dash\n" "$C2" 1;           expect_rc 2 "user name starting with a dash"
@@ -193,6 +205,16 @@ run "$GOOD_STDIN" "$C2" 1;                       expect_rc 2 "repository unreach
 expect_out "cannot fetch main" "  clear message"
 rm -rf "$SB/remote.git"; mv "$SB/remote.bak" "$SB/remote.git"
 stub_idle "deploy-test.sh never ran without valid credentials"
+# Every real token format is accepted and reaches deploy-test.sh whole.
+for t in "$TOKEN" "$LEGACY_TOKEN" "$PAT_TOKEN"; do
+    case "$t" in
+        "$TOKEN") label="Actions GITHUB_TOKEN, stateless JWT format (. - _)" ;;
+        "$LEGACY_TOKEN") label="legacy short format" ;;
+        *) label="fine-grained PAT format" ;;
+    esac
+    run "$t\n$ACTOR\n" "$C2" 1; expect_rc 0 "token accepted: $label, ${#t} characters"
+    rec "GHCR_TOKEN_LENGTH=${#t}" "  handed to deploy-test.sh whole"
+done
 
 # =============================================================================
 section "3. Only commits on main"
