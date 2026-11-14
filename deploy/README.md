@@ -153,8 +153,12 @@ de test. Elle s'adresse à l'équipe **et à l'administrateur de la VM**.
 > - **arrêt d'urgence** : remettre `DEPLOY_TEST: 'off'` sur `main` (le wrapper
 >   refuse aussi tout commit dont le `publish.yml` ne l'active pas), ou
 >   supprimer `/etc/sudoers.d/aquaops-deploy` sur la VM ;
-> - la preuve NFR-08 (moins de 20 minutes entre le push et l'application saine)
->   est le journal du premier run réussi du job « Deploy to test VM ».
+> - **premier déploiement réussi** (après le correctif Kafka, PR #106) : les
+>   10 conteneurs Compose `healthy`, la gateway répond `UP`, images publiées
+>   sur GHCR, déploiement en **121 s** ;
+> - **NFR-08 pas encore prouvée** : ce succès vient d'un *re-run* manuel, sa
+>   mesure « depuis le push » (7980 s) n'est pas valable (§ 5). Il faut le
+>   journal d'un **run automatique neuf** déclenché par un push sur `main`.
 >
 > **Eureka : intégration partielle, à coordonner dans l'équipe.**
 > - assets-service contient le **client** Eureka
@@ -405,6 +409,14 @@ déploiements simultanés.
   Le job passe `PUSHED_AT` à partir de l'événement `push`. Comme le script
   tourne via `sudo` (environnement remis à zéro), ces durées apparaissent dans
   le **journal** du job, pas dans son résumé.
+- **Preuve NFR-08 valable** : `PUSHED_AT` est l'heure du push de l'événement
+  d'origine. Un *re-run* garde cet événement : la durée « depuis le push »
+  inclut alors l'attente avant la relance et ne mesure pas la pipeline (cas du
+  premier succès : 7980 s depuis le push, pour 121 s de déploiement). La preuve
+  doit venir d'un run déclenché par un push sur `main`, **première tentative**
+  (pas de « Re-run jobs »), sans échec ni relance d'un job, avec dans le journal
+  de « Deploy to test VM » une durée depuis le push **≤ 1200 s** et l'état
+  `healthy` des services. Noter le numéro du run, le SHA et cette ligne.
 - **Codes de sortie** : `0` déployé et sain · `1` échec du déploiement · `2` refus
   avant d'avoir touché un conteneur (entrée, configuration ou environnement
   invalide).
