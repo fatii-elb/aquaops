@@ -21,7 +21,10 @@
 #     AQUAOPS_PROJECT        default aquaops-test; must be aquaops-test or
 #                            aquaops-test-<suffix>: other projects are refused
 #     AQUAOPS_WITH_INFRA     true: also use compose.infra.yml (PostgreSQL, Kafka,
-#                            Keycloak in Docker); default false
+#                            Keycloak in Docker); default false. The env file
+#                            must then also set KEYCLOAK_ADMIN,
+#                            KEYCLOAK_ADMIN_PASSWORD and KEYCLOAK_AUDIT_CLIENT_SECRET
+#                            (not empty, not "change-me")
 #     AQUAOPS_HEALTH_TIMEOUT seconds for wait-healthy.sh, default 180
 #     AQUAOPS_STATE_DIR      where deployed SHAs are recorded, default
 #                            ${XDG_STATE_HOME:-~/.local/state}/aquaops-deploy/<project>
@@ -231,7 +234,10 @@ env_value() {   # last assignment of KEY in the env file, quotes removed
         | sed -E 's/^"(.*)"$/\1/; s/^'\''(.*)'\''$/\1/; s/[[:space:]]+$//'
 }
 required=(DB_HOST DB_USER DB_PASSWORD KAFKA_BOOTSTRAP_SERVERS KEYCLOAK_ISSUER_URI)
-[ "$WITH_INFRA" != true ] || required+=(KEYCLOAK_ADMIN KEYCLOAK_ADMIN_PASSWORD)
+# With compose.infra.yml: Keycloak admin, and the secret of the "aquaops-audit"
+# client (login audit, read by the realm import and by assets-service).
+[ "$WITH_INFRA" != true ] \
+    || required+=(KEYCLOAK_ADMIN KEYCLOAK_ADMIN_PASSWORD KEYCLOAK_AUDIT_CLIENT_SECRET)
 bad=()
 for k in "${required[@]}"; do
     v="$(env_value "$k")"
