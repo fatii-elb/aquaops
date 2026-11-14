@@ -328,6 +328,7 @@ et `deploy/test/compose.infra.yml`) :
 | `GATEWAY_BIND`, `GATEWAY_HOST_PORT` | non (`127.0.0.1`, `8080`) | Adresse et port de la gateway sur la VM. |
 | `KEYCLOAK_BIND`, `KEYCLOAK_HOST_PORT` | non (`127.0.0.1`, `8180`) | Idem pour Keycloak (avec `compose.infra.yml`). |
 | `JAVA_MEM_LIMIT` | non (`768m`) | Limite mémoire de chaque service Java. |
+| `KAFKA_HEAP_OPTS` | non (`-Xms512m -Xmx512m`) | Mémoire du broker Kafka (avec `compose.infra.yml`). La sonde de santé de Kafka utilise son propre tas de 64 Mo. |
 
 **Variables passées au script par le déploiement** (jamais dans `test.env`).
 Dans le déploiement automatique, c'est le wrapper qui les fixe : le runner ne
