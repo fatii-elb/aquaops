@@ -141,18 +141,31 @@ celles des `application.yml` des services. `docker compose up -d` marche tel que
 Carte SCRUM-55 · E5. Cette section prépare le déploiement automatique sur la VM
 de test. Elle s'adresse à l'équipe **et à l'administrateur de la VM**.
 
-> **État au moment de la rédaction — rien n'est encore en service :**
+> **État actuel — le déploiement automatique n'est pas encore en service :**
 > - **aucun runner** GitHub Actions n'est installé ni enregistré ;
+> - **aucun job de déploiement** n'existe dans les workflows : le chemin
+>   automatisé (job GitHub Actions → images GHCR → `deploy-test.sh`) n'a jamais
+>   été exécuté ;
 > - la **publication GHCR est désactivée** (`GHCR_PUBLISH: 'off'` dans
 >   `.github/workflows/publish.yml`) et Trivy est en **mode audit**
 >   (`TRIVY_EXIT_CODE: '0'`, décision de E4 en attente) ;
-> - **aucun déploiement** n'a été fait sur la VM ; il n'existe pas encore de job
->   de déploiement dans les workflows ;
-> - **Eureka n'est pas intégré** (absent du dépôt) : son éventuel ajout reste à
->   coordonner dans l'équipe. La gateway route aujourd'hui vers des adresses
->   fixes (`TELEMETRY_URL`…) résolues par le réseau Docker : Eureka n'est pas
->   nécessaire au déploiement. S'il arrive, ce sera un service et une image de
->   plus à ajouter au compose, au script de déploiement et à `wait-healthy.sh`.
+> - un premier déploiement **manuel** a été réalisé par E5 sur la VM Ubuntu de
+>   test (services sains, smoke test de la gateway passé) ; il ne remplace pas
+>   la preuve du déploiement automatique (NFR-08).
+>
+> **Eureka : intégration partielle, à coordonner dans l'équipe.**
+> - assets-service contient le **client** Eureka
+>   (`spring-cloud-starter-netflix-eureka-client`), **désactivé par défaut**
+>   (`EUREKA_ENABLED`, défaut `false` ; adresse dans `EUREKA_URL`) : sans
+>   serveur, le service démarre normalement ;
+> - le dépôt ne contient **aucun serveur Eureka** (le `pom.xml` d'assets-service
+>   l'attribue à E5) ; seuls les manifestes `deploy/k8s/` supposent un service
+>   `eureka`, ils ne sont pas utilisés par cet environnement de test ;
+> - `deploy/test/compose.yml` n'active pas Eureka : la gateway route vers des
+>   adresses fixes (`TELEMETRY_URL`…) résolues par le réseau Docker, Eureka n'est
+>   donc **pas nécessaire** au déploiement de test. L'activer demandera un
+>   service et une image de plus, `EUREKA_ENABLED`/`EUREKA_URL`, et une mise à
+>   jour du compose, de `deploy-test.sh` et de `wait-healthy.sh`.
 
 ### Ce qui est déjà prêt (dans le dépôt)
 
@@ -250,10 +263,20 @@ lisible par le seul compte du runner. `deploy-test.sh` refuse :
 - un fichier situé dans le dossier du dépôt ;
 - un fichier accessible à d'autres que son propriétaire (`stat -c '%a'` doit
   donner `600`, recommandé, ou `400`, `500`, `700`) ;
-- une variable obligatoire absente, vide ou laissée à `change-me` ;
+- une variable obligatoire absente, vide ou laissée à `change-me` (avec
+  `AQUAOPS_WITH_INFRA=true`, cela vaut aussi pour `KEYCLOAK_ADMIN`,
+  `KEYCLOAK_ADMIN_PASSWORD` et `KEYCLOAK_AUDIT_CLIENT_SECRET`) ;
 - un fichier qui définit `IMAGE_TAG` ou `IMAGE_NAMESPACE` (c'est le déploiement qui les fournit) ;
 - une variable utilisée par les fichiers Compose qui serait **aussi exportée**
   dans l'environnement du shell (elle écraserait la valeur du fichier sans prévenir).
+
+**Gitleaks et les fichiers d'exemple.** Depuis SCRUM-62 (#95), `.gitleaks.toml`
+n'exclut plus les fichiers `.env.example` : ils sont analysés comme les autres
+fichiers, sur les commits de chaque PR et de chaque push sur `main`. Un vrai
+secret ajouté à `deploy/test/.env.example` serait donc signalé, ce qui ferait
+échouer la PR et, sur `main`, bloquerait la construction des images. N'y
+mettre que des valeurs factices (`change-me`) ; les vraies valeurs vont
+uniquement dans `/etc/aquaops/test.env`, sur la VM.
 
 Création, par l'administrateur, avec un fichier vide à remplir ensuite à partir
 de `deploy/test/.env.example` :
@@ -275,6 +298,7 @@ et `deploy/test/compose.infra.yml`) :
 | `KAFKA_BOOTSTRAP_SERVERS` | oui | Adresse Kafka vue par les conteneurs (`kafka:9092` si l'infrastructure est dans Docker). |
 | `KEYCLOAK_ISSUER_URI` | oui | Doit être **exactement** l'`iss` des jetons (voir § 4). |
 | `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD` | oui avec `compose.infra.yml` | Compte administrateur de Keycloak. |
+| `KEYCLOAK_AUDIT_CLIENT_SECRET` | oui avec `compose.infra.yml` | Secret du client Keycloak `aquaops-audit` (audit des connexions, FR-24), lu par l'import du realm et par assets-service. Valeur propre à cet environnement (par exemple générée avec `openssl rand -hex 24`), jamais `change-me`. |
 | `GATEWAY_BIND`, `GATEWAY_HOST_PORT` | non (`127.0.0.1`, `8080`) | Adresse et port de la gateway sur la VM. |
 | `KEYCLOAK_BIND`, `KEYCLOAK_HOST_PORT` | non (`127.0.0.1`, `8180`) | Idem pour Keycloak (avec `compose.infra.yml`). |
 | `JAVA_MEM_LIMIT` | non (`768m`) | Limite mémoire de chaque service Java. |
