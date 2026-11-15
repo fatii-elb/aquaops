@@ -2,7 +2,8 @@
 
 Registre des services AquaOps (Spring Cloud Netflix Eureka), carte **TECH Eureka**.
 Les services s'y inscrivent par leur nom (`spring.application.name`) ; la gateway
-les retrouvera par ce nom (`lb://assets-service`, PR séparée).
+les retrouve par ce nom en mode Eureka (`lb://assets-service`, voir
+`services/gateway/README.md`).
 
 - Spring Boot 4.1.1, Spring Cloud **2025.1.3** (même train que `gateway` et
   `assets-service`). Le train 2025.1.x prend en charge Boot 4.1.x à partir de
@@ -113,6 +114,50 @@ curl -s -H 'Accept: application/json' http://localhost:8761/eureka/apps/ASSETS-S
 ```
 
 (nom en majuscules ; `404` = pas inscrit).
+
+## Migration service par service (à faire par chaque responsable)
+
+La gateway sait déjà router chaque service par Eureka (`services/gateway/README.md`).
+Tant qu'un service n'a pas le client, la gateway garde son adresse fixe : rien
+ne casse si un service migre plus tard que les autres.
+
+| Responsable | Service | `spring.application.name` (ne pas changer) | Port | Route gateway en mode Eureka | État |
+| --- | --- | --- | --- | --- | --- |
+| E1 | telemetry-service | `telemetry-service` | 8081 | `lb://telemetry-service` | à faire : étapes 1 à 3 |
+| E1 | simulator | `simulator` | 8086 | `lb://simulator` | à faire : étapes 1 à 3 |
+| E2 | assets-service | `assets-service` | 8082 | `lb://assets-service` | **fait** (client présent, testé avec la gateway) |
+| E3 | detection-service | `detection-service` | 8083 | `lb://detection-service` | à faire : étapes 1 à 3 |
+| E4 | incidents-service | `incidents-service` | 8084 | `lb://incidents-service` | à faire : étapes 1 à 3 |
+| E6 | notifications-service | `notifications-service` | 8085 | `lb://notifications-service` | à faire : étapes 1 à 3 |
+
+Pour chaque service, dans **sa propre PR** (par son responsable) :
+
+1. Ajouter la dépendance et le BOM (étape 1 ci-dessus). Si le service n'avait
+   pas Spring Cloud, vérifier ensuite `./mvnw verify` : aucun test ne doit changer.
+2. Copier le bloc `eureka:` (étape 2) dans son `application.yml`, **sans rien
+   changer** : `enabled: ${EUREKA_ENABLED:false}` garde le service tel quel tant
+   qu'on n'active pas Eureka.
+3. Tester en local :
+
+   ```bash
+   # Terminal 1 : le registre
+   cd services/eureka-server && ./mvnw spring-boot:run
+   # Terminal 2 : la gateway en mode Eureka
+   cd services/gateway && SPRING_PROFILES_ACTIVE=eureka ./mvnw spring-boot:run
+   # Terminal 3 : le service, avec Eureka activé
+   cd services/<service> && EUREKA_ENABLED=true ./mvnw spring-boot:run
+   # Le service est inscrit, puis la gateway le joint par son nom :
+   curl -s -H 'Accept: application/json' http://localhost:8761/eureka/apps/<NOM-EN-MAJUSCULES>
+   curl -i http://localhost:8080/api/<prefixe>/...      # 503 = pas (encore) inscrit
+   ```
+
+4. Prévenir E5 : dans `deploy/integration/compose.eureka.yml`, E5 ajoute au
+   service `EUREKA_ENABLED: "true"` et `EUREKA_URL: http://eureka:8761/eureka`,
+   et passe son `*_URL` de la gateway à `lb://<nom>`.
+
+Le service s'inscrit avec son adresse IP (`prefer-ip-address`) : dans Docker
+et Kubernetes, c'est l'adresse du conteneur ou du pod, joignable par la gateway
+sur le même réseau.
 
 ## Tests
 
