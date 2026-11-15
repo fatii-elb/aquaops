@@ -16,6 +16,7 @@ Prérequis : Docker Desktop (ou Docker Engine avec le plugin `compose`).
 | `kafka` | 9092 | Topics `sensor-readings`, `anomaly-detected`, `incident-events` (créés automatiquement au démarrage) |
 | `kafka-init` | - | Crée les 3 topics au démarrage, puis s'arrête (état `Exited (0)`, c'est normal) |
 | `keycloak` | 8180 | Connexion et rôles, realm `aquaops` importé au démarrage. Console : http://localhost:8180/admin |
+| `eureka` | 8761 | **Optionnel** (profil `eureka`, ne démarre pas avec `up -d`) : registre des services. `docker compose --profile eureka up -d --build eureka`, tableau de bord http://localhost:8761. Voir `services/eureka-server/README.md`. |
 
 ## Commandes
 
