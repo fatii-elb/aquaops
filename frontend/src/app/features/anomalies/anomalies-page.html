@@ -1,0 +1,191 @@
+<app-shell title="Alertes &amp; Anomalies" active="alerts" [alertsCount]="openCount()">
+  <div class="flex flex-col gap-space-xl p-space-xl lg:p-space-2xl">
+
+    <!-- En-tête -->
+    <section class="flex flex-col justify-between gap-space-lg rounded-xl bg-surface-container-lowest p-space-xl shadow-sm lg:flex-row lg:items-center">
+      <div class="flex min-w-0 flex-col gap-space-2xs">
+        <span class="flex w-fit items-center gap-space-2xs rounded-full bg-primary-fixed px-space-sm py-space-2xs font-label-sm text-label-sm font-bold uppercase tracking-wider text-on-primary-fixed-variant">
+          <span class="material-symbols-outlined text-[14px]">warning</span>
+          Détection automatique
+        </span>
+        <h1 class="font-display-md text-display-md tracking-tight text-on-surface">Alertes &amp; Anomalies</h1>
+        <p class="max-w-3xl font-body-md text-body-md text-on-surface-variant">
+          Suivez les anomalies détectées sur le réseau : fuites probables, pompes en défaut et capteurs silencieux.
+        </p>
+      </div>
+      <div class="flex shrink-0 flex-col items-start gap-space-xs lg:items-end">
+        <button type="button" data-testid="refresh" (click)="reload()" [disabled]="refreshing()"
+          class="flex items-center gap-space-xs rounded-lg bg-surface-container-low px-space-md py-space-sm font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container disabled:opacity-60">
+          <span class="material-symbols-outlined text-[18px] {{ refreshing() ? 'animate-spin' : '' }}">refresh</span>
+          Actualiser
+        </button>
+        <p class="font-label-sm text-label-sm text-secondary" data-testid="last-updated" aria-live="off">
+          Actualisation automatique toutes les {{ refreshSeconds }} s
+          @if (lastUpdated(); as updated) {
+            · dernière mise à jour {{ time(updated) }}
+          }
+        </p>
+      </div>
+    </section>
+
+    <!-- Indicateurs -->
+    <section class="grid grid-cols-1 gap-space-lg sm:grid-cols-3" aria-label="Indicateurs">
+      <article class="flex flex-col gap-space-sm rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+        <span class="font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">Anomalies ouvertes</span>
+        @if (openCount() !== null) {
+          <span class="font-metric-value text-metric-value {{ openCount() ? 'text-error' : 'text-on-surface' }}" data-testid="kpi-open">{{ openCount() }}</span>
+        } @else {
+          <span class="h-[30px] w-12 animate-pulse rounded-md bg-surface-container-high" aria-hidden="true"></span>
+        }
+      </article>
+      <article class="flex flex-col gap-space-sm rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+        <span class="font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">Résultats (filtres appliqués)</span>
+        @if (data(); as page) {
+          <span class="font-metric-value text-metric-value text-on-surface" data-testid="kpi-total">{{ page.totalElements }}</span>
+        } @else {
+          <span class="h-[30px] w-12 animate-pulse rounded-md bg-surface-container-high" aria-hidden="true"></span>
+        }
+      </article>
+      <article class="flex flex-col gap-space-sm rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+        <span class="font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">Incidents liés (page affichée)</span>
+        <span class="font-metric-value text-metric-value text-on-surface" data-testid="kpi-linked">{{ linkedCount() }}</span>
+      </article>
+    </section>
+
+    <!-- Liste -->
+    <section class="flex flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
+      <div class="flex flex-wrap items-end gap-space-sm px-space-xl pt-space-xl">
+        <label class="relative min-w-56 flex-1">
+          <span class="sr-only">Rechercher</span>
+          <span class="material-symbols-outlined pointer-events-none absolute left-space-md top-1/2 -translate-y-1/2 text-[18px] text-secondary">search</span>
+          <input type="search" data-testid="search" [value]="search()" (input)="setSearch($any($event.target).value)"
+            placeholder="Rechercher dans la page : type, zone, capteur…"
+            class="w-full rounded-lg bg-surface-container-low py-space-sm pl-10 pr-space-md font-body-md text-body-md text-on-surface outline-none placeholder:text-secondary/70 focus:ring-1 focus:ring-primary" />
+        </label>
+        <select data-testid="filter-zone" aria-label="Filtrer par zone" (change)="setZone($any($event.target).value)"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+          <option value="" [selected]="query().zoneId === null">Toutes les zones</option>
+          @for (z of ctx.zones(); track z.id) {
+            <option [value]="z.id" [selected]="query().zoneId === z.id">{{ z.name }}</option>
+          }
+        </select>
+        <select data-testid="filter-type" aria-label="Filtrer par type" (change)="setType($any($event.target).value)"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+          <option value="" [selected]="!query().type">Tous les types</option>
+          @for (t of types; track t) {
+            <option [value]="t" [selected]="query().type === t">{{ typeLabel(t) }}</option>
+          }
+        </select>
+        <select data-testid="filter-status" aria-label="Filtrer par statut" (change)="setStatus($any($event.target).value)"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+          <option value="" [selected]="!query().status">Tous les statuts</option>
+          <option value="OPEN" [selected]="query().status === 'OPEN'">Ouvertes</option>
+          <option value="RESOLVED" [selected]="query().status === 'RESOLVED'">Résolues</option>
+        </select>
+        <label class="flex flex-col gap-space-2xs font-label-sm text-label-sm text-secondary">Du
+          <input type="datetime-local" data-testid="filter-from" [value]="toLocalInput(query().from)" (change)="setFrom($any($event.target).value)"
+            class="rounded-lg bg-surface-container-low px-space-sm py-space-xs font-label-md text-label-md text-on-surface outline-none focus:ring-1 focus:ring-primary" />
+        </label>
+        <label class="flex flex-col gap-space-2xs font-label-sm text-label-sm text-secondary">Au
+          <input type="datetime-local" data-testid="filter-to" [value]="toLocalInput(query().to)" (change)="setTo($any($event.target).value)"
+            class="rounded-lg bg-surface-container-low px-space-sm py-space-xs font-label-md text-label-md text-on-surface outline-none focus:ring-1 focus:ring-primary" />
+        </label>
+        @if (filtersActive()) {
+          <button type="button" data-testid="reset-filters" (click)="resetFilters()"
+            class="flex items-center gap-space-xs rounded-lg px-space-md py-space-sm font-label-md text-label-md text-primary transition-colors hover:bg-primary-fixed">
+            <span class="material-symbols-outlined text-[18px]">filter_alt_off</span>Réinitialiser
+          </button>
+        }
+      </div>
+      <p class="px-space-xl pt-space-xs font-label-sm text-label-sm text-secondary">
+        Les filtres, le tri et la pagination sont appliqués par le serveur ; la recherche rapide porte sur la page affichée.
+      </p>
+
+      <div class="mt-space-lg">
+        @if (error(); as err) {
+          <app-state-block kind="error" [message]="err.message" [retryable]="err.retryable" (retry)="reload()" />
+        }
+
+        @if (!data()) {
+          @if (!error()) {
+            <app-state-block kind="loading" />
+          }
+        } @else if (data()!.totalElements === 0) {
+          <app-state-block kind="empty" icon="verified"
+            [title]="filtersActive() ? 'Aucun résultat' : 'Aucune anomalie détectée'"
+            [message]="filtersActive() ? 'Aucune anomalie ne correspond aux filtres.' : 'Le réseau ne présente aucune anomalie pour le moment.'">
+            @if (filtersActive()) {
+              <button type="button" (click)="resetFilters()" class="font-label-md text-label-md text-primary hover:underline">Réinitialiser les filtres</button>
+            }
+          </app-state-block>
+        } @else {
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left" aria-label="Anomalies détectées">
+              <thead class="bg-surface-container-low">
+                <tr>
+                  @for (col of [
+                    { f: 'detectedAt', l: 'Détection' },
+                    { f: 'type', l: 'Type' },
+                    { f: 'zoneId', l: 'Zone' }
+                  ]; track col.f) {
+                    <th scope="col" [attr.aria-sort]="ariaSort($any(col.f))" class="whitespace-nowrap px-space-xl py-space-md">
+                      <button type="button" [attr.data-sort]="col.f" (click)="toggleSort($any(col.f))"
+                        class="inline-flex items-center gap-space-2xs font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary transition-colors hover:text-primary">
+                        {{ col.l }}
+                        <span class="material-symbols-outlined text-[16px] {{ ariaSort($any(col.f)) === 'none' ? 'opacity-40' : 'text-primary' }}">{{ sortIcon($any(col.f)) }}</span>
+                      </button>
+                    </th>
+                  }
+                  <th scope="col" class="whitespace-nowrap px-space-xl py-space-md font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Capteur</th>
+                  <th scope="col" class="whitespace-nowrap px-space-xl py-space-md font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Gravité</th>
+                  <th scope="col" [attr.aria-sort]="ariaSort('status')" class="whitespace-nowrap px-space-xl py-space-md">
+                    <button type="button" data-sort="status" (click)="toggleSort('status')"
+                      class="inline-flex items-center gap-space-2xs font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary transition-colors hover:text-primary">
+                      Statut
+                      <span class="material-symbols-outlined text-[16px] {{ ariaSort('status') === 'none' ? 'opacity-40' : 'text-primary' }}">{{ sortIcon('status') }}</span>
+                    </button>
+                  </th>
+                  <th scope="col" class="whitespace-nowrap px-space-xl py-space-md font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Incident</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (a of rows(); track a.id) {
+                  <tr data-testid="anomaly-row" [attr.data-id]="a.id" tabindex="0" (click)="open(a)" (keydown.enter)="open(a)"
+                    class="cursor-pointer border-t border-outline-variant/30 transition-colors hover:bg-surface-container-low focus-visible:bg-surface-container-low focus-visible:outline-none">
+                    <td class="whitespace-nowrap px-space-xl py-space-md font-mono-telemetry text-mono-telemetry text-on-surface-variant">{{ date(a.detectedAt) }}</td>
+                    <td class="px-space-xl py-space-md font-label-md text-label-md font-semibold text-on-surface">{{ typeLabel(a.type) }}</td>
+                    <td class="px-space-xl py-space-md font-body-md text-body-md text-on-surface-variant">{{ ctx.zoneName(a.zoneId) }}</td>
+                    <td class="px-space-xl py-space-md font-body-md text-body-md text-on-surface-variant">{{ ctx.sensorName(a.sensorId) }}</td>
+                    <td class="px-space-xl py-space-md"><app-severity-badge [severity]="a.severity" /></td>
+                    <td class="px-space-xl py-space-md"><app-status-badge [status]="a.status" /></td>
+                    <td class="px-space-xl py-space-md">
+                      @if (incidentOf(a); as inc) {
+                        <a [routerLink]="['/incidents', inc.id]" (click)="$event.stopPropagation()" data-testid="incident-link"
+                          class="font-label-md text-label-md font-semibold text-primary hover:underline">Incident n° {{ inc.id }}</a>
+                      } @else {
+                        <span class="text-secondary">—</span>
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="7" class="px-space-xl py-space-xl text-center font-body-md text-body-md text-on-surface-variant" data-testid="no-search-results">
+                      Aucune anomalie de cette page ne correspond à la recherche.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <app-pagination [page]="data()!.page" [size]="data()!.size" [total]="data()!.totalElements"
+            (pageChange)="setPage($event)" (sizeChange)="setSize($event)" />
+        }
+      </div>
+    </section>
+  </div>
+</app-shell>
+
+@if (detail(); as anomaly) {
+  <app-anomaly-detail [anomaly]="anomaly" [zoneName]="ctx.zoneName(anomaly.zoneId)" [sensorName]="ctx.sensorName(anomaly.sensorId)"
+    [incident]="incidentOf(anomaly)" (closed)="close()" />
+}

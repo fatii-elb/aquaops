@@ -10,3 +10,5 @@ CREATE DATABASE aquaops_assets OWNER aquaops;
 CREATE DATABASE aquaops_incidents OWNER aquaops;
 CREATE DATABASE aquaops_notifications OWNER aquaops;
 CREATE DATABASE aquaops_telemetry OWNER aquaops;
+
+CREATE DATABASE aquaops_detection OWNER aquaops;

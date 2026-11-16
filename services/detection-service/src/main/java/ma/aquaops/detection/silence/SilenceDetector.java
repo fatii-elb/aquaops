@@ -1,9 +1,13 @@
 package ma.aquaops.detection.silence;
 
+import ma.aquaops.detection.engine.AnomalyRecoveryListener;
 import ma.aquaops.detection.kafka.AnomalyPublisher;
 import ma.aquaops.detection.model.Anomaly;
 import ma.aquaops.detection.model.SensorReading;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -20,6 +24,9 @@ import java.util.UUID;
 @Component
 public class SilenceDetector {
 
+    private static final Logger log =
+            LoggerFactory.getLogger(SilenceDetector.class);
+
     private record SensorState(
             Integer zoneId,
             Instant measuredAt,
@@ -30,6 +37,9 @@ public class SilenceDetector {
     private final Duration threshold;
     private final AnomalyPublisher publisher;
     private final Map<Integer, SensorState> sensors = new HashMap<>();
+
+    // Facultatif : prevenu quand un capteur silencieux reprend (BE-1)
+    private AnomalyRecoveryListener recoveryListener;
 
     public SilenceDetector(
             Clock clock,
@@ -51,8 +61,25 @@ public class SilenceDetector {
                 ? reading.measuredAt()
                 : received;
 
-        sensors.put(reading.sensorId(),
+        SensorState previous = sensors.put(reading.sensorId(),
                 new SensorState(reading.zoneId(), measured, received, false));
+
+        if (previous != null && previous.silent() && recoveryListener != null) {
+            try {
+                recoveryListener.onSensorRecovered(
+                        reading.zoneId(), reading.sensorId());
+            } catch (RuntimeException e) {
+                log.warn("Reprise du capteur {} non enregistree : {}",
+                        reading.sensorId(), e.toString());
+            }
+        }
+    }
+
+    @Autowired(required = false)
+    public synchronized void setRecoveryListener(
+            AnomalyRecoveryListener listener) {
+
+        this.recoveryListener = listener;
     }
 
     @Scheduled(fixedRateString = "${silence.check-interval-ms:1000}")
