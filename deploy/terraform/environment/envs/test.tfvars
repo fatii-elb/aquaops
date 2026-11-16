@@ -25,4 +25,10 @@ container_defaults = {
   max_memory             = "1536Mi"
 }
 
-ghcr_pull_secret = true
+# No GHCR token stored in Kubernetes (decision of 2026-11-15): public
+# infrastructure images, AquaOps images imported into k3s after their scan.
+ghcr_pull_secret = false
+
+# PostgreSQL, Kafka, Keycloak and Eureka stay in Docker Compose on the VM for
+# now: not deployed in k3s for "test" (decision of 2026-11-15).
+infrastructure_enabled = false

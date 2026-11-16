@@ -143,3 +143,55 @@ variable "ghcr_token" {
   sensitive   = true
   ephemeral   = true
 }
+
+# -----------------------------------------------------------------------------
+# Infrastructure: PostgreSQL, Kafka, Keycloak, Eureka (infrastructure.tf...)
+# -----------------------------------------------------------------------------
+
+variable "infrastructure_enabled" {
+  description = "Deploy PostgreSQL, Kafka, Keycloak and Eureka in this environment."
+  type        = bool
+  default     = false
+}
+
+variable "infrastructure_images" {
+  description = "Infrastructure images, pinned by tag AND digest (same tags as Docker Compose)."
+  type = object({
+    postgres = string
+    kafka    = string
+    keycloak = string
+  })
+  default = {
+    postgres = "postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42"
+    kafka    = "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837"
+    keycloak = "quay.io/keycloak/keycloak:26.8.0@sha256:27b3230fbabb8c9ff3c66c864cf09dcd8a41aca82e5100679d109ef0eeb05741"
+  }
+
+  validation {
+    condition     = alltrue([for i in values(var.infrastructure_images) : can(regex("^[^:@]+(:[^:@]+)?@sha256:[0-9a-f]{64}$", i))])
+    error_message = "Each infrastructure image must be pinned by digest (name:tag@sha256:...)."
+  }
+}
+
+variable "eureka_image" {
+  description = "Eureka server image, built from services/eureka-server, scanned, then imported into k3s (no registry, no token). Tag = source commit."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.eureka_image == null || can(regex("^localhost/aquaops/eureka-server:[0-9a-f]{7,40}$", var.eureka_image))
+    error_message = "eureka_image: localhost/aquaops/eureka-server:<commit SHA> (imported image, never \"latest\")."
+  }
+}
+
+variable "infrastructure_storage" {
+  description = "Size of the persistent volumes (local-path, under /var/lib/rancher/k3s/storage)."
+  type = object({
+    postgres = string
+    kafka    = string
+  })
+  default = {
+    postgres = "2Gi"
+    kafka    = "2Gi"
+  }
+}

@@ -9,7 +9,7 @@ namespace   = "aquaops-rc11"
 quota = {
   requests_cpu    = "1"
   requests_memory = "2Gi"
-  limits_cpu      = "3"
+  limits_cpu      = "4"
   limits_memory   = "3Gi"
   pods            = 20
   pvcs            = 4
@@ -28,4 +28,13 @@ config = {
   AQUAOPS_DISPOSABLE = "true"
 }
 
-ghcr_pull_secret = true
+# No GHCR token stored in Kubernetes (decision of 2026-11-15): public
+# infrastructure images, AquaOps images imported into k3s after their scan.
+ghcr_pull_secret = false
+
+# Full infrastructure in the disposable environment (RC-11).
+infrastructure_enabled = true
+
+# Built from services/eureka-server at commit b496543, scanned (Trivy, no
+# CRITICAL) and imported into k3s: see README, "Image Eureka".
+eureka_image = "localhost/aquaops/eureka-server:b496543"

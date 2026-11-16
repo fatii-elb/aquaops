@@ -9,11 +9,13 @@ deploy/terraform/
 ├── tf.sh                 seul point d'entrée : contrôles, état, workspace, garde-fous
 ├── cluster/              une fois par cluster : cert-manager (Helm), jamais détruit par RC-11
 └── environment/          une fois par environnement = un namespace
-    ├── envs/test.tfvars  namespace "aquaops" (celui des manifestes de E2), durable
-    └── envs/rc11.tfvars  namespace "aquaops-rc11", jetable (RC-11)
+    ├── main.tf           fondation : namespace, quotas, réseau, ConfigMap, secrets
+    ├── postgres.tf  kafka.tf  keycloak.tf  eureka.tf   infrastructure (§ 7)
+    ├── envs/test.tfvars  namespace "aquaops" (celui des manifestes de E2), durable, infrastructure désactivée
+    └── envs/rc11.tfvars  namespace "aquaops-rc11", jetable (RC-11), infrastructure activée
 ```
 
-## 1. Ce que crée chaque environnement (cette PR)
+## 1. Ce que crée chaque environnement (fondation)
 
 | Objet | Nom | Rôle |
 | --- | --- | --- |
@@ -24,8 +26,8 @@ deploy/terraform/
 | ConfigMap | `aquaops-config` | Adresses internes communes (`DB_HOST`, `KAFKA_BOOTSTRAP_SERVERS`, `EUREKA_URL`, `KEYCLOAK_ISSUER_URI`…), aucun secret |
 | Secret | `aquaops-db` | `DB_USER`, `DB_PASSWORD` (nom attendu par `deploy/k8s/assets`) |
 | Secret | `aquaops-keycloak` | `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_AUDIT_CLIENT_SECRET` |
-| Secret | `ghcr-pull` | Accès en lecture aux images privées `ghcr.io/fatii-elb/aquaops/*` |
-| ServiceAccount | `default` | Utilise `ghcr-pull` pour tous les pods ; aucun jeton d'API monté par défaut |
+| Secret | `ghcr-pull` | **Désactivé** (`ghcr_pull_secret = false`, décision du 15/11/2026) : aucun jeton GHCR dans Kubernetes |
+| ServiceAccount | `default` | Aucun jeton d'API monté par défaut ; utiliserait `ghcr-pull` s'il était activé |
 
 ## 2. Secrets : jamais dans Git, ni dans l'état Terraform
 
@@ -38,10 +40,10 @@ deploy/terraform/
   clair), **pas** pour `destroy`.
 - Changer une valeur : modifier le fichier, puis augmenter `secrets_revision`
   (`-var secrets_revision=2`). Les valeurs en écriture seule ne sont pas comparées.
-- **Jeton GHCR** : jeton *classic* avec **uniquement** `read:packages` (GHCR
-  n'accepte pas les jetons *fine-grained*), date d'expiration courte, créé pour
-  cet usage seulement. Le jeton éphémère `GITHUB_TOKEN` du pipeline ne
-  convient pas : il expire à la fin du job.
+- **Images AquaOps sans jeton GHCR dans le cluster** : elles sont construites,
+  analysées (Trivy) puis importées dans k3s (§ 7, « Image Eureka »), avec
+  `imagePullPolicy: Never`. Si un jour `ghcr_pull_secret = true` : jeton
+  *classic* avec **uniquement** `read:packages`, expiration courte.
 
 Sur la VM, un fichier par environnement, lisible par root seulement :
 
@@ -57,8 +59,6 @@ sudoedit /etc/aquaops-terraform/test.env
 #   TF_VAR_keycloak_admin=...
 #   TF_VAR_keycloak_admin_password=...
 #   TF_VAR_keycloak_audit_client_secret=...
-#   TF_VAR_ghcr_username=...
-#   TF_VAR_ghcr_token=...
 ```
 
 Pour `rc11` : un fichier `/etc/aquaops-terraform/rc11.env` avec **d'autres**
@@ -132,12 +132,16 @@ sudo k3s kubectl -n aquaops get all,secret,cm                              # 5. 
 unset "${!TF_VAR_@}"
 ```
 
-**Mesuré dans le bac à sable** (couche « fondation » seule) : destruction en 9 s
-sans aucun secret chargé, puis reconstruction en 6 s, soit 22 s en tout. Le
-`plan` suivant ne trouve aucun écart, et `test` est inchangé (même identifiant,
-mêmes objets). Le même cycle couvrira l'infrastructure et les services quand
-les PRs suivantes les ajouteront à cette pile ; ce sera alors la preuve RC-11
-complète (+ pipeline).
+**Mesuré dans le bac à sable** :
+
+| Contenu de `rc11` | Destruction (sans secret chargé) | Reconstruction jusqu'à « tout Ready » |
+| --- | --- | --- |
+| Fondation seule | 9 s | 6 s |
+| Fondation + infrastructure (§ 7) | 18 s, volumes et dossiers de données supprimés | 119 à 130 s (images déjà présentes ; 330 s au tout premier téléchargement) |
+
+Dans les deux cas, le `plan` suivant ne trouve aucun écart, et `test` est
+inchangé (même identifiant, mêmes objets). Les services (PR suivante)
+s'ajouteront au même cycle ; ce sera alors la preuve RC-11 complète (+ pipeline).
 
 ## 5. Validations (sans cluster)
 
@@ -157,10 +161,82 @@ Linux et Windows (`terraform providers lock -platform=linux_amd64 -platform=wind
 
 | PR | Contenu | Utilise |
 | --- | --- | --- |
-| Infrastructure | PostgreSQL (StatefulSet + PVC + scripts de `deploy/integration/postgres-init`), Kafka KRaft, Keycloak (import du realm de `docs/keycloak`), Eureka : Services nommés `postgres`, `kafka`, `keycloak`, `eureka` | `aquaops-db`, `aquaops-keycloak`, quotas |
-| Services | Les 7 services (images `ghcr.io/fatii-elb/aquaops/<service>:<SHA>`, variable `image_tag`), sondes Actuator, gateway et frontend avec `aquaops.ma/ingress=true` ; reprise des manifestes de E2 | `aquaops-config`, `ghcr-pull` |
+| Infrastructure | **Faite** : § 7 | `aquaops-db`, `aquaops-keycloak`, quotas |
+| Services | Les 7 services (images importées comme Eureka, puis `ghcr.io/...:<SHA>` quand Images reviendra), sondes Actuator, gateway et frontend avec `aquaops.ma/ingress=true` ; reprise des manifestes de E2 ; quota de `rc11` à relever | `aquaops-config` |
 | Pipeline | Job de déploiement k3s après Images, même modèle de compte dédié que `aquaops-deploy` ; quand le quota GitHub Actions le permet | `tf.sh` |
 
 À l'arrivée de la pile complète, le budget mémoire de `deploy/k3s/README.md`
 (§ 2) impose un choix : retirer Compose, ajouter une seconde VM, ou travailler
 par fenêtres de maintenance.
+
+## 7. Infrastructure (PostgreSQL, Kafka, Keycloak, Eureka)
+
+Activée par `infrastructure_enabled = true` : **seulement dans `rc11`** pour
+l'instant. Sur la VM, `test` garde l'infrastructure de Docker Compose.
+Ressources Kubernetes natives, mêmes images et mêmes réglages que Compose,
+images figées par **tag et empreinte** (`infrastructure_images`).
+
+| Service (nom attendu par E2) | Objet | Image | Données | Mémoire demandée / limite | Mesurée |
+| --- | --- | --- | --- | --- | --- |
+| `postgres:5432` | StatefulSet | `postgres:18.6` | volume 2 Gi ; 4 bases créées par `deploy/integration/postgres-init/01-databases.sh` (lu tel quel) | 256 / 512 Mi | 45 à 50 Mi |
+| `kafka:9092` | StatefulSet, KRaft 1 nœud | `apache/kafka:4.3.1` | volume 2 Gi ; topics créés automatiquement | 640 Mi / 1 Gi | 406 à 419 Mi |
+| `keycloak:8180` | Deployment, `start-dev` (test) | `quay.io/keycloak/keycloak:26.8.0` | realm `docs/keycloak/aquaops-realm.json` (E2) réimporté à chaque démarrage | 512 / 768 Mi | 606 à 617 Mi |
+| `eureka:8761` | Deployment | image importée (ci-dessous) | - | 256 / 384 Mi | 209 à 224 Mi |
+| **Total** | | | | **1,6 / 2,6 Gi** (quota `rc11` : 2 / 3 Gi) | **1,27 à 1,31 Gi** |
+
+Mesures `kubectl top` dans le bac à sable, au repos. Le nœud entier (k3s +
+add-ons + infrastructure) occupe environ 2,1 Gio de mémoire anonyme : sur la
+VM, c'est ce qui s'ajouterait à la pile Compose si `rc11` y tournait.
+
+Sécurité : `enable_service_links = false` partout (obligatoire pour Kafka :
+l'image transforme toute variable `KAFKA_*` en réglage du broker, et le Service
+`kafka` injecterait `KAFKA_PORT=tcp://...`). Aucun jeton d'API monté, seccomp
+`RuntimeDefault`, `allowPrivilegeEscalation: false`, toutes les capacités
+retirées. PostgreSQL (uid 999) et Eureka (uid 999) : utilisateur non root
+vérifié et système de fichiers racine en lecture seule. Écarts restants
+(Trivy, objets déployés) : 0 CRITICAL ; 2 HIGH acceptés pour Kafka et Keycloak
+(racine en écriture : Kafka génère sa configuration dans l'image, `start-dev`
+écrit dans `/opt/keycloak`) ; 3 MEDIUM « registres de confiance » ; 9 LOW (uid
+< 10000).
+
+### Image Eureka : construite, analysée, importée (sans registre ni jeton)
+
+L'image n'est pas encore sur GHCR (workflow Images désactivé). Sur la VM,
+depuis la copie du dépôt, **sur le commit fusionné** :
+
+```bash
+SRC=$(git log -1 --format=%h -- services/eureka-server)     # doit égaler eureka_image dans envs/rc11.tfvars
+docker build -f deploy/docker/spring-service.Dockerfile \
+  --label org.opencontainers.image.revision=$SRC \
+  -t localhost/aquaops/eureka-server:$SRC services/eureka-server
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.76.2 image \
+  --severity CRITICAL --ignore-unfixed --exit-code 1 localhost/aquaops/eureka-server:$SRC   # 0 = aucun CRITICAL
+docker save localhost/aquaops/eureka-server:$SRC | sudo k3s ctr images import -
+sudo k3s crictl images | grep eureka-server
+```
+
+Le nom `localhost/...` et `imagePullPolicy: Never` garantissent que k3s ne
+télécharge jamais cette image : sans import, le pod reste en
+`ErrImageNeverPull` au lieu de prendre une image publique homonyme. La
+construction utilise Docker sur la VM : la faire hors des heures de test
+(CPU et mémoire partagés avec Compose).
+
+### Ce qui a été vérifié (bac à sable, jamais sur la VM)
+
+| Composant | Test | Résultat |
+| --- | --- | --- |
+| PostgreSQL | Bases présentes après un volume vide | `aquaops_assets`, `aquaops_incidents`, `aquaops_notifications`, `aquaops_telemetry` ; PostgreSQL 18.6, uid 999 |
+| Kafka | Production puis lecture depuis un autre pod via `kafka:9092`, topic créé automatiquement | message relu |
+| Keycloak | Issuer, client `aquaops-audit`, utilisateurs, rôles | issuer `http://keycloak:8180/realms/aquaops` ; jeton obtenu avec le secret de `aquaops-keycloak`, refusé avec un mauvais secret ou le texte `${KEYCLOAK_AUDIT_CLIENT_SECRET}` ; 4 utilisateurs et 4 rôles importés |
+| Eureka | Santé, registre, actuator | `UP` ; registre 200 ; `/actuator/env` 404 |
+| **Compatibilité E2** | **Vrai manifeste** `deploy/k8s/assets/deployment.yaml` déployé dans `rc11` (namespace, image importée et 1 réplica changés à la volée, fichier inchangé) | prêt en 41 s, 0 redémarrage, 0 erreur ; connecté à `aquaops_assets`, groupe Kafka rejoint, inscrit dans Eureka ; jeton émis par `keycloak:8180` **accepté** (403 sans le rôle, 401 pour un faux jeton) |
+
+Le test E2 a demandé un quota plus grand (passé par `-var`, `rc11.tfvars`
+inchangé) : infrastructure + 1 réplica d'assets = 3,4 Gi de limites, au-delà
+des 3 Gi de `rc11`. À relever dans la PR « Services ».
+
+Point d'attention : avec `default-deny-ingress`, la **toute première**
+connexion d'un pod qui vient de démarrer peut être refusée (le contrôleur de
+NetworkPolicy de k3s met moins d'une seconde à l'autoriser). Les services
+Spring, qui démarrent en plus de 10 s, ne sont pas concernés ; un script de
+test doit réessayer.
