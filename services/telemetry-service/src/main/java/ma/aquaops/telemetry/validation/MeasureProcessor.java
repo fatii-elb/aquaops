@@ -29,6 +29,11 @@ public class MeasureProcessor {
 
     /** Retourne true si la mesure a été acceptée et envoyée au sink. */
     public boolean process(Map<String, Object> mesure) {
+        return process(mesure, null);
+    }
+
+    /** Idem, en notant l'origine Kafka de la mesure (pour ignorer un message livre deux fois). */
+    public boolean process(Map<String, Object> mesure, KafkaSource source) {
         ValidationResult resultat = validator.validate(mesure);
         if (!resultat.isValid()) {
             rejected.incrementAndGet();
@@ -38,7 +43,7 @@ public class MeasureProcessor {
                     mesure == null ? null : mesure.get("measuredAt"));
             return false;
         }
-        sink.record(versReading(mesure));
+        sink.record(versReading(mesure, source));
         accepted.incrementAndGet();
         return true;
     }
@@ -57,13 +62,14 @@ public class MeasureProcessor {
         return rejected.get();
     }
 
-    private Reading versReading(Map<String, Object> m) {
+    private Reading versReading(Map<String, Object> m, KafkaSource source) {
         Long sensorId = ((Number) m.get("sensorId")).longValue();
         Long zoneId = ((Number) m.get("zoneId")).longValue();
         Double valeur = m.get("value") instanceof Number n ? n.doubleValue() : null;
         String unite = m.get("unit") instanceof String s ? s : null;
         String etatPompe = m.get("pumpState") instanceof String p ? p : null;
         Instant date = Instant.parse((String) m.get("measuredAt"));
-        return new Reading(sensorId, zoneId, (String) m.get("type"), valeur, unite, etatPompe, date);
+        Reading reading = new Reading(sensorId, zoneId, (String) m.get("type"), valeur, unite, etatPompe, date);
+        return source == null ? reading : reading.withSource(source.partition(), source.offset(), source.timestamp());
     }
 }

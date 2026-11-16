@@ -1,0 +1,15 @@
+OK : flux de connexion du realm : browser-mfa
+OK : le flux de connexion contient les formulaires MFA
+OK : sous-flux « MFA - superviseur » présent
+OK : « MFA - superviseur » est conditionnel dans forms-mfa
+OK : condition sur le rôle présente (MFA - superviseur)
+OK : la condition vise bien le rôle superviseur (sans négation)
+OK : code OTP exigé (MFA - superviseur)
+OK : sous-flux « MFA - administrateur » présent
+OK : « MFA - administrateur » est conditionnel dans forms-mfa
+OK : condition sur le rôle présente (MFA - administrateur)
+OK : la condition vise bien le rôle administrateur (sans négation)
+OK : code OTP exigé (MFA - administrateur)
+OK : rôles superviseur et administrateur définis dans le realm
+OK : aucun MFA prévu pour operateur et technicien
+RÉSULTAT : configuration conforme

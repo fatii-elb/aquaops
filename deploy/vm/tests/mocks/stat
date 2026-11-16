@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Test double of "stat" for deploy/vm/tests: the real stat, except that the
+# path named in MOCK_STAT_FOREIGN (mock.conf) is reported as owned by another
+# user ("intruder"). Lets the tests check every owner rule without root.
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+out="$(/usr/bin/stat "$@")" || exit $?
+if [ -n "${MOCK_STAT_FOREIGN:-}" ] && [ "${*: -1}" = "$MOCK_STAT_FOREIGN" ]; then
+    case "$*" in *'%U %a'*) out="intruder ${out#* }" ;; esac
+fi
+printf '%s\n' "$out"

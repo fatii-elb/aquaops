@@ -1,46 +1,74 @@
 server:
   port: ${GATEWAY_PORT:8080}
+  # Arret gracieux : les requetes en cours se terminent avant l'arret du pod (NFR-05, NFR-07).
+  shutdown: graceful
 
 spring:
   application:
     name: gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   cloud:
     gateway:
       server:
         webflux:
+          # The /api prefixes are the API contract: never change them here.
+          # Each route sends to aquaops.gateway.targets.<service>, chosen below
+          # (fixed address) or in application-eureka.yml (Eureka, lb://).
           routes:
             - id: telemetry
-              uri: ${TELEMETRY_URL:http://localhost:8081}
+              uri: ${aquaops.gateway.targets.telemetry}
               predicates:
                 - Path=/api/telemetry/**
 
             - id: assets
-              uri: ${ASSETS_URL:http://localhost:8082}
+              uri: ${aquaops.gateway.targets.assets}
               predicates:
                 - Path=/api/assets/**
 
             - id: detection
-              uri: ${DETECTION_URL:http://localhost:8083}
+              uri: ${aquaops.gateway.targets.detection}
               predicates:
                 - Path=/api/detection/**
 
             - id: incidents
-              uri: ${INCIDENTS_URL:http://localhost:8084}
+              uri: ${aquaops.gateway.targets.incidents}
               predicates:
                 - Path=/api/incidents/**
 
             - id: notifications
-              uri: ${NOTIFICATIONS_URL:http://localhost:8085}
+              uri: ${aquaops.gateway.targets.notifications}
               predicates:
                 - Path=/api/notifications/**
 
             - id: simulator
-              uri: ${SIMULATOR_URL:http://localhost:8086}
+              uri: ${aquaops.gateway.targets.simulator}
               predicates:
                 - Path=/api/simulator/**
 
+# Default routing (Sprint 4, unchanged): fixed addresses, one variable per service.
+aquaops:
+  gateway:
+    targets:
+      telemetry: ${TELEMETRY_URL:http://localhost:8081}
+      assets: ${ASSETS_URL:http://localhost:8082}
+      detection: ${DETECTION_URL:http://localhost:8083}
+      incidents: ${INCIDENTS_URL:http://localhost:8084}
+      notifications: ${NOTIFICATIONS_URL:http://localhost:8085}
+      simulator: ${SIMULATOR_URL:http://localhost:8086}
+
+# Eureka is off by default: the gateway never needs a registry to start.
+# Turn it on with SPRING_PROFILES_ACTIVE=eureka (application-eureka.yml).
+eureka:
+  client:
+    enabled: false
+
 management:
   endpoint:
+    health:
+      # /actuator/health/liveness et /actuator/health/readiness : sondes Kubernetes (NFR-05).
+      probes:
+        enabled: true
     gateway:
       access: unrestricted
   endpoints:

@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth.service';
 import { EVENT_SOURCE_FACTORY } from '../../core/notification-stream';
 import { ComingSoon } from './coming-soon';
 import { routes } from '../../app.routes';
+import { Reports } from '../reports/reports';
 
 function render(data: Record<string, unknown>): HTMLElement {
   TestBed.configureTestingModule({
@@ -40,12 +41,20 @@ describe('ComingSoon', () => {
 });
 
 describe('routes des pages d\'attente (FE-6)', () => {
-  it.each(['telemetry', 'reports', 'observability'])('/%s existe et exige une connexion', (path) => {
+  it.each(['telemetry', 'observability'])('/%s existe et exige une connexion', (path) => {
     const route = routes.find((r) => r.path === path);
     expect(route).toBeDefined();
     expect(route?.canActivate?.length).toBe(1);
     expect(route?.data?.['title']).toBeTruthy();
     expect(route?.data?.['active']).toBe(path);
+  });
+
+  it('/reports utilise la véritable page Rapports FE-10 avec contrôle d’accès', () => {
+    const route = routes.find((r) => r.path === 'reports');
+    expect(route).toBeDefined();
+    expect(route?.component).toBe(Reports);
+    expect(route?.canActivate?.length).toBe(1);
+    expect(route?.providers?.length).toBeGreaterThan(0);
   });
 
   it('les routes existantes sont conservées', () => {

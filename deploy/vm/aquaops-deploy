@@ -1,0 +1,319 @@
+#!/bin/bash -p
+# =============================================================================
+# AquaOps: privileged deployment wrapper of the TEST VM.
+# Card SCRUM-55 / NFR-08 · E5
+#
+# Installed by the VM administrator from a reviewed commit of main, never run
+# from a checkout:   /usr/local/sbin/aquaops-deploy   (root:root, mode 755)
+# It runs as the dedicated account "aquaops-deploy" (member of the docker
+# group). The GitHub Actions runner account "aquaops-runner" (no docker group,
+# no sudo group) may start it through ONE sudoers rule
+# (deploy/vm/aquaops-deploy.sudoers), from the deploy job of publish.yml:
+#
+#   printf '%s\n%s\n' "$TOKEN" "$ACTOR" \
+#     | sudo -n -u aquaops-deploy /usr/local/sbin/aquaops-deploy <sha> <pushed_at>
+#
+# Administrator only (the sudoers rule does not allow it): full checks, no
+# container touched, then exit 0 (ready) or 2 (a deployment would be refused):
+#
+#   printf '%s\n%s\n' "$TOKEN" "$ACTOR" \
+#     | sudo -u aquaops-deploy /usr/local/sbin/aquaops-deploy check <sha>
+#
+# stdin, line 1: GitHub token able to read the repository and its packages
+#                (in the job: the GITHUB_TOKEN, contents: read, packages: read)
+# stdin, line 2: GitHub user name for the registry login
+# The token is never on a command line, never printed, never written to disk.
+#
+# The caller chooses ONLY the commit SHA (and the push time, a number). The
+# repository URL, the branch, every path, the Compose project, the env file,
+# the scripts and the Docker settings are fixed below. The caller's
+# environment and working directory are ignored ("bash -p" + environment
+# wiped below), in addition to what sudo already resets.
+#
+# Steps: arguments -> owner and mode of every trusted path (PATH included) ->
+# lock -> fetch main into a private bare repository (no git hook, no stored
+# credential) -> the SHA must be on main -> the publish.yml of THAT commit must
+# say DEPLOY_TEST 'on', GHCR_PUBLISH 'on', TRIVY_EXIT_CODE '1' -> host checks
+# (standalone simulator, published ports) -> export the deploy files of THAT
+# commit to a fixed folder -> run its deploy/scripts/deploy-test.sh
+# (unchanged: pull, up -d, wait-healthy.sh, gateway smoke test).
+#
+# A SHA on main is reviewed code, not proven-safe code: whoever can merge to
+# main decides what runs here, and whoever can push images to the GHCR
+# namespace decides what the containers run (deploy/README.md, § 2 and § 7).
+#
+# Exit codes (same as deploy-test.sh): 0 deployed and healthy · 1 deployment
+# failed · 2 refused before touching any container.
+# =============================================================================
+set -euo pipefail
+umask 077
+
+# BEGIN FIXED CONFIGURATION (the tests replace this block, nothing else)
+readonly DEPLOY_USER=aquaops-deploy
+readonly BASE=/var/lib/aquaops-deploy
+readonly SELF=/usr/local/sbin/aquaops-deploy
+readonly ROOT_OWNER=root
+readonly CONF_DIR=/etc/aquaops
+readonly ENV_FILE=/etc/aquaops/test.env
+readonly REPO_URL=https://github.com/fatii-elb/aquaops.git
+readonly SAFE_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# END FIXED CONFIGURATION
+
+readonly PROJECT=aquaops-test
+readonly WITH_INFRA=true
+readonly IMAGE_NAMESPACE=ghcr.io/fatii-elb/aquaops
+readonly MAIN_REF=refs/remotes/origin/main
+readonly GIT_DIR_PATH="$BASE/repo.git"
+readonly RELEASE="$BASE/release"
+readonly STATE_DIR="$BASE/state"
+readonly TMP_DIR="$BASE/tmp"
+readonly LOCK_FILE="$BASE/lock"
+# What deploy-test.sh needs from the commit: itself, wait-healthy.sh, the two
+# Compose files and the folders compose.infra.yml mounts (relative paths).
+readonly -a EXPORT_PATHS=(
+    deploy/scripts/deploy-test.sh
+    deploy/scripts/wait-healthy.sh
+    deploy/test/compose.yml
+    deploy/test/compose.infra.yml
+    deploy/integration/postgres-init
+    docs/keycloak
+)
+
+# ---- Clean environment: keep nothing from the caller -------------------------
+caller="${SUDO_USER:-}"
+[[ "$caller" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || caller="?"
+while IFS= read -r v; do unset -v "$v" 2> /dev/null || true; done < <(compgen -e)
+export PATH="$SAFE_PATH" HOME="$BASE" LC_ALL=C
+cd /
+
+log()    { printf '[aquaops-deploy] %s\n' "$*"; }
+refuse() { printf '[aquaops-deploy] REFUSED: %s\n' "$*" >&2; exit 2; }
+
+# ---- 1. Arguments (values are never echoed back) ------------------------------
+MODE=deploy
+SHA=""
+PUSHED_AT=""
+if [ "$#" -eq 2 ] && [ "$1" = check ]; then
+    MODE=check
+    SHA="$2"
+elif [ "$#" -eq 2 ]; then
+    SHA="$1"
+    PUSHED_AT="$2"
+else
+    refuse "usage: aquaops-deploy <40-hex commit SHA> <push time, epoch seconds> | aquaops-deploy check <40-hex commit SHA>"
+fi
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || refuse "the commit must be a full 40-character lowercase SHA"
+[ "$MODE" = check ] || [[ "$PUSHED_AT" =~ ^[0-9]{1,12}$ ]] \
+    || refuse "the push time must be a number (epoch seconds)"
+
+[ "$(id -un)" = "$DEPLOY_USER" ] || refuse "must run as $DEPLOY_USER (sudo -u $DEPLOY_USER)"
+
+# ---- 2. Token and user name, from stdin only ----------------------------------
+[ ! -t 0 ] || refuse "pipe the token on stdin (line 1) and the GitHub user name (line 2)"
+TOKEN=""
+ACTOR=""
+IFS= read -r -t 10 TOKEN || true
+IFS= read -r -t 2 ACTOR || true
+# Token alphabet: letters, digits, "_", "." and "-". Since October 2026 the
+# Actions GITHUB_TOKEN is a stateless "ghs_<app id>_<JWT>" token of about 520
+# characters, with dots and dashes; PATs (github_pat_...) stay shorter. No
+# space, quote or shell character: the token only ever goes to environment
+# variables, base64 and awk, never to a command line or a shell evaluation.
+if ! [[ "$TOKEN" =~ ^[A-Za-z0-9_.-]{20,4096}$ ]]; then
+    TOKEN=""
+    refuse "missing or malformed token on stdin (line 1)"
+fi
+[[ "$ACTOR" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,38})(\[bot\])?$ ]] \
+    || refuse "missing or malformed GitHub user name on stdin (line 2)"
+
+# ---- 3. Trusted paths: owner, type, no write access for group or others -------
+check_owned() {   # check_owned <path> <d|f> <owner>
+    local path="$1" type="$2" owner="$3" info mode
+    [ ! -L "$path" ] || refuse "$path is a symbolic link"
+    if [ "$type" = d ]; then [ -d "$path" ] || refuse "$path: missing directory"
+    else [ -f "$path" ] || refuse "$path: missing file"; fi
+    info="$(stat -c '%U %a' -- "$path")" || refuse "cannot read the owner of $path"
+    [ "${info% *}" = "$owner" ] || refuse "$path must be owned by $owner"
+    mode="${info#* }"
+    (( (8#$mode & 8#022) == 0 )) || refuse "$path must not be writable by group or others"
+}
+check_owned "$SELF" f "$ROOT_OWNER"
+check_owned "$(dirname "$SELF")" d "$ROOT_OWNER"
+check_owned "$CONF_DIR" d "$ROOT_OWNER"
+check_owned "$ENV_FILE" f "$DEPLOY_USER"
+case "$(stat -c '%a' -- "$ENV_FILE")" in
+    600|400) ;;
+    *) refuse "$ENV_FILE must be readable by $DEPLOY_USER only (mode 600)" ;;
+esac
+check_owned "$BASE" d "$DEPLOY_USER"
+(( (8#$(stat -c '%a' -- "$BASE") & 8#007) == 0 )) || refuse "$BASE must not be accessible to others (mode 700)"
+# Every PATH directory (git, docker, bash, tar... come from there): owned by
+# root, not writable by group or others.
+IFS=: read -r -a path_dirs <<< "$SAFE_PATH"
+for d in "${path_dirs[@]}"; do
+    [ -d "$d" ] || continue
+    info="$(stat -L -c '%U %a' -- "$d")" || refuse "cannot read the owner of $d"
+    case "${info% *}" in root|"$ROOT_OWNER") ;; *) refuse "PATH directory $d must be owned by root" ;; esac
+    (( (8#${info#* } & 8#022) == 0 )) || refuse "PATH directory $d must not be writable by group or others"
+done
+for d in "$GIT_DIR_PATH" "$STATE_DIR" "$TMP_DIR"; do
+    [ -e "$d" ] || [ -L "$d" ] || mkdir -m 700 -- "$d"
+    check_owned "$d" d "$DEPLOY_USER"
+done
+[ ! -L "$LOCK_FILE" ] || refuse "$LOCK_FILE is a symbolic link"
+
+# ---- 4. One deployment at a time ----------------------------------------------
+exec 9> "$LOCK_FILE"
+flock -n 9 || refuse "another deployment is running"
+trap 'rm -rf -- "$BASE/release.new" "$TMP_DIR/check"' EXIT
+
+log "mode: $MODE  commit: $SHA  caller: $caller"
+
+# ---- 5. The commit must be on main --------------------------------------------
+git_cmd() {   # git on the private bare repository: no user or system config, no hook
+    # shellcheck disable=SC2030  # git settings for this git process only, on purpose
+    (
+        export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 \
+            GIT_ASKPASS=/bin/false SSH_ASKPASS=/bin/false GIT_SSH_COMMAND=/bin/false \
+            GIT_CONFIG_COUNT="${GIT_CONFIG_COUNT:-1}" \
+            GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null
+        exec git --git-dir="$GIT_DIR_PATH" "$@"
+    )
+}
+if [ ! -f "$GIT_DIR_PATH/HEAD" ]; then
+    git_cmd init --quiet --bare --template= > /dev/null || refuse "cannot create $GIT_DIR_PATH"
+fi
+# The token goes to git through its environment (GIT_CONFIG_*), never through
+# the command line or a file; no credential helper may store it.
+auth="$(printf 'x-access-token:%s' "$TOKEN" | base64 -w 0)"
+# shellcheck disable=SC2031  # settings 1 and 2 for this fetch only, on purpose
+if ! (
+    export GIT_CONFIG_COUNT=3 \
+        GIT_CONFIG_KEY_1=http.https://github.com/.extraheader \
+        GIT_CONFIG_VALUE_1="AUTHORIZATION: basic $auth" \
+        GIT_CONFIG_KEY_2=credential.helper GIT_CONFIG_VALUE_2=
+    git_cmd fetch --quiet --no-tags --no-write-fetch-head -- "$REPO_URL" "+refs/heads/main:$MAIN_REF"
+); then
+    refuse "cannot fetch main from $REPO_URL (network or token)"
+fi
+unset auth
+git_cmd cat-file -e "$SHA^{commit}" 2> /dev/null || refuse "commit $SHA does not exist in the repository"
+git_cmd merge-base --is-ancestor "$SHA" "$MAIN_REF" 2> /dev/null \
+    || refuse "commit $SHA is not on main: only merged commits are deployed"
+log "commit $SHA is on main (main is at $(git_cmd rev-parse "$MAIN_REF"))"
+
+# ---- 5b. Deployment policy committed in THAT commit ---------------------------
+# The runner could call the wrapper outside the official job: the switches of
+# .github/workflows/publish.yml at that commit must all allow a deployment.
+policy="$(git_cmd show "$SHA:.github/workflows/publish.yml" 2> /dev/null)" || policy=""
+policy_ok=true
+for rule in "DEPLOY_TEST: 'on'" "GHCR_PUBLISH: 'on'" "TRIVY_EXIT_CODE: '1'"; do
+    grep -qE "^  ${rule}[[:space:]]*(#.*)?\$" <<< "$policy" || policy_ok=false
+done
+if [ "$policy_ok" = true ]; then
+    log "policy of $SHA: DEPLOY_TEST on, GHCR_PUBLISH on, TRIVY_EXIT_CODE 1"
+elif [ "$MODE" = check ]; then
+    log "NOTE: the policy of $SHA (publish.yml) does not allow a deployment yet: a real deployment would be refused"
+else
+    refuse "the policy of $SHA does not allow a deployment (publish.yml needs DEPLOY_TEST 'on', GHCR_PUBLISH 'on', TRIVY_EXIT_CODE '1')"
+fi
+
+# ---- 6. Host checks: never a second stack or a second simulator ---------------
+env_port() {   # env_port <KEY> <default>: a published port from the env file
+    local v
+    v="$(sed -n -E "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*[\"']?([0-9]{1,5})[\"']?[[:space:]]*\$/\1/p" "$ENV_FILE" | tail -n 1)"
+    printf '%s' "${v:-$2}"
+}
+docker version --format '{{.Server.Version}}' > /dev/null 2>&1 \
+    || refuse "cannot reach the Docker daemon (is $DEPLOY_USER in the docker group?)"
+ports=("$(env_port GATEWAY_HOST_PORT 8080)" "$(env_port KEYCLOAK_HOST_PORT 8180)")
+running="$(docker ps --no-trunc --format '{{.Names}}|{{.Image}}|{{.Label "com.docker.compose.project"}}|{{.Ports}}')" \
+    || refuse "docker ps failed"
+problems=()
+while IFS='|' read -r name image project published; do
+    [ -n "$name" ] && [ "$project" != "$PROJECT" ] || continue
+    case "$name $image" in
+        *simulator*) problems+=("simulator running outside project $PROJECT: container $name (stop it: there would be two simulators)") ;;
+    esac
+    for p in "${ports[@]}"; do
+        case "$published" in
+            *":$p->"*) problems+=("port $p already published by container $name (project [${project:-none}])") ;;
+        esac
+    done
+done <<< "$running"
+
+project_containers="$(docker ps -a --filter "label=com.docker.compose.project=$PROJECT" \
+    --format '{{.Names}}  {{.Image}}  {{.State}}')" || refuse "docker ps failed"
+if [ -n "$project_containers" ]; then
+    log "containers of project $PROJECT (updated in place, volumes kept):"
+    printf '    %s\n' "$project_containers"
+else
+    log "project $PROJECT has no container yet: a deployment creates it (with empty volumes)"
+fi
+
+if [ "${#problems[@]}" -gt 0 ]; then
+    for p in "${problems[@]}"; do printf '[aquaops-deploy] PROBLEM: %s\n' "$p" >&2; done
+    refuse "host checks failed: nothing was changed"
+fi
+
+# ---- 7. Deploy files of THAT commit -------------------------------------------
+export_tree() {   # export_tree <dest>: readable by the containers that mount it
+    local dest="$1"
+    rm -rf -- "$dest"
+    (
+        umask 022
+        mkdir -- "$dest"
+        git_cmd archive --format=tar "$SHA" -- "${EXPORT_PATHS[@]}" \
+            | tar -x -f - -C "$dest" --no-same-owner
+    ) || refuse "cannot export the deploy files of $SHA"
+}
+
+if [ "$MODE" = check ]; then
+    export_tree "$TMP_DIR/check"
+    files=(-f "$TMP_DIR/check/deploy/test/compose.yml" -f "$TMP_DIR/check/deploy/test/compose.infra.yml")
+    # shellcheck disable=SC2030  # exported for this one command only, on purpose
+    if ! (
+        export IMAGE_TAG="$SHA" IMAGE_NAMESPACE
+        exec docker compose -p "$PROJECT" "${files[@]}" --env-file "$ENV_FILE" config --quiet
+    ); then
+        refuse "docker compose rejected the configuration with $ENV_FILE"
+    fi
+    log "CHECK OK: commit on main, trusted paths, host and Compose configuration ready; nothing was changed"
+    [ "$policy_ok" = true ] || log "CHECK OK, but the policy of this commit still refuses a deployment (see NOTE above)"
+    exit 0
+fi
+
+# Fixed folder: Compose resolves the bind mounts of compose.infra.yml from it,
+# so an unchanged service keeps the same configuration and is not recreated.
+export_tree "$BASE/release.new"
+rm -rf -- "$BASE/release.old"
+[ ! -e "$RELEASE" ] || mv -T -- "$RELEASE" "$BASE/release.old"
+mv -T -- "$BASE/release.new" "$RELEASE"
+rm -rf -- "$BASE/release.old"
+
+# ---- 8. Run deploy-test.sh of that commit, with fixed settings ----------------
+# Its output goes through a filter that hides the token if it ever appeared.
+redact() {
+    REDACT_VALUE="$TOKEN" awk '
+        BEGIN { t = ENVIRON["REDACT_VALUE"]; n = length(t) }
+        {
+            line = $0; out = ""
+            while (n > 0 && (i = index(line, t)) > 0) { out = out substr(line, 1, i - 1) "***"; line = substr(line, i + n) }
+            print out line; fflush()
+        }'
+}
+set +e
+# shellcheck disable=SC2031  # exported for deploy-test.sh only, on purpose
+(
+    export IMAGE_TAG="$SHA" IMAGE_NAMESPACE PUSHED_AT \
+        AQUAOPS_ENV_FILE="$ENV_FILE" AQUAOPS_WITH_INFRA="$WITH_INFRA" \
+        AQUAOPS_PROJECT="$PROJECT" AQUAOPS_STATE_DIR="$STATE_DIR" TMPDIR="$TMP_DIR" \
+        GHCR_USERNAME="$ACTOR" GHCR_TOKEN="$TOKEN"
+    exec bash "$RELEASE/deploy/scripts/deploy-test.sh"
+) 2>&1 9>&- | redact
+rc="${PIPESTATUS[0]}"
+set -e
+TOKEN=""
+case "$rc" in 0|1|2) ;; *) rc=1 ;; esac
+log "deploy-test.sh finished with exit code $rc"
+exit "$rc"

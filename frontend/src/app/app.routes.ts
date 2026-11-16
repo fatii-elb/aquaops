@@ -9,6 +9,10 @@ import { IncidentCenter } from './features/incidents/incident-center/incident-ce
 import { AssetsPage } from './features/assets/assets-page/assets-page';
 import { ComingSoon } from './features/placeholder/coming-soon';
 import { AnomaliesPage } from './features/anomalies/anomalies-page';
+import { ApiReportsDataSource } from './features/reports/api-reports-data-source';
+import { MockReportsDataSource } from './features/reports/mock-reports-data-source';
+import { REPORTS_DATA_SOURCE_CONFIG, ReportsDataSource } from './features/reports/reports-data-source';
+import { Reports } from './features/reports/reports';
 
 export const routes: Routes = [
   { path: 'login', component: Login },
@@ -24,12 +28,6 @@ export const routes: Routes = [
     data: { title: 'Télémétrie & Capteurs', active: 'telemetry', icon: 'sensors', description: 'Les courbes et les dernières valeurs des capteurs arrivent bientôt.' },
   },
   {
-    path: 'reports',
-    component: ComingSoon,
-    canActivate: [authGuard],
-    data: { title: 'Rapports & Analyses', active: 'reports', icon: 'analytics', description: 'Les rapports et les analyses du réseau arrivent bientôt.' },
-  },
-  {
     path: 'observability',
     component: ComingSoon,
     canActivate: [authGuard],
@@ -37,6 +35,13 @@ export const routes: Routes = [
   },
   { path: 'administration', component: Administration, canActivate: [roleGuard('administrateur')] },
   { path: 'audit', component: Audit, canActivate: [roleGuard('superviseur', 'administrateur')] },
+  {
+    // Rapports & Analyses (FE-10, FE-13) : superviseur et administrateur. Source 'api' ou 'mock' : voir reports-data-source.ts.
+    path: 'reports',
+    component: Reports,
+    canActivate: [roleGuard('superviseur', 'administrateur')],
+    providers: [{ provide: ReportsDataSource, useClass: REPORTS_DATA_SOURCE_CONFIG.mode === 'api' ? ApiReportsDataSource : MockReportsDataSource }],
+  },
   { path: 'forbidden', component: Forbidden },
   { path: '', pathMatch: 'full', redirectTo: 'login' },
   { path: '**', redirectTo: 'login' },

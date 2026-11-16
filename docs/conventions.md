@@ -25,6 +25,7 @@ aquaops/
 ├── contracts/events/     the 3 Kafka event contracts (SCRUM-60)
 ├── services/             one folder per backend service
 │   ├── gateway/                 E5
+│   ├── eureka-server/           E5
 │   ├── telemetry-service/       E1
 │   ├── simulator/               E1
 │   ├── assets-service/          E2
@@ -59,6 +60,7 @@ Service folder names: lowercase, hyphens, ending in `-service`
 | Notifications | 8085 |
 | Simulator | 8086 |
 | Keycloak | **8180** (its default 8080 clashes with the gateway) |
+| Eureka server | 8761 |
 | PostgreSQL | 5432 |
 | Kafka | 9092 |
 | Angular dev server | 4200 |

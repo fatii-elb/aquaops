@@ -1,0 +1,41 @@
+server:
+  port: ${EUREKA_PORT:8761}
+
+spring:
+  application:
+    name: eureka-server
+
+eureka:
+  instance:
+    # Name the server gives itself. Docker / Kubernetes: the service name (eureka).
+    hostname: ${EUREKA_HOSTNAME:localhost}
+  client:
+    # Standalone server: it does not register with itself and has no peer to
+    # copy a registry from.
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+  server:
+    # Self-preservation keeps every instance when many renewals are missed at
+    # once (network split). With a few services on one VM it would keep a
+    # stopped service in the registry for minutes: off, so a dead instance
+    # leaves in less than 45 s (TECH Eureka card).
+    enable-self-preservation: ${EUREKA_SELF_PRESERVATION:false}
+    # Look for expired leases every 5 s (default 60 s).
+    eviction-interval-timer-in-ms: ${EUREKA_EVICTION_INTERVAL_MS:5000}
+    # Answer from the live registry, not from a copy refreshed every 30 s.
+    use-read-only-response-cache: false
+    # Single server: no peer to wait for at startup.
+    wait-time-in-ms-when-sync-empty: 0
+
+management:
+  endpoint:
+    health:
+      # /actuator/health/liveness and /readiness: Kubernetes probes (SCRUM-56).
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health

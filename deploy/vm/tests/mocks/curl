@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Test double of "curl" for deploy/vm/tests: the gateway answers UP.
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+echo "CALL curl $*" >> "$MOCK_LOG"
+echo '{"status":"UP"}'

@@ -1,0 +1,34 @@
+# =============================================================================
+# AquaOps: k3s server configuration for the test VM (SCRUM-56 / NFR-09, E5).
+# Installed as /etc/rancher/k3s/config.yaml (root:root, 600), BEFORE k3s.
+# Single node, embedded SQLite datastore (lighter than etcd on 8 GB).
+# =============================================================================
+
+# kubeconfig readable by root only (default would be 644 with some flags).
+write-kubeconfig-mode: "0600"
+
+# Kubernetes Secrets encrypted at rest in the datastore. The key lives in
+# /var/lib/rancher/k3s/server/cred/: part of the backup (README).
+secrets-encryption: true
+
+# Explicit address ranges. Docker uses 172.17.0.0/16 and up, VirtualBox
+# 10.0.2.0/24 (NAT) and 192.168.56.0/24 (host-only): no overlap.
+# preflight.sh checks the Docker networks of this VM.
+cluster-cidr: 10.42.0.0/16
+service-cidr: 10.43.0.0/16
+cluster-dns: 10.43.0.10
+
+node-label:
+  - "aquaops.ma/role=test"
+
+kubelet-arg:
+  # The Docker Compose stack (Sprint 4) runs on the same VM and the kubelet
+  # does not see it. Reserving its memory keeps k3s from scheduling pods
+  # into it: allocatable = 8 GiB - 5 GiB - 512 MiB - eviction = about 2 GiB.
+  # Lower system-reserved when Compose is retired (README, "Budget").
+  - "system-reserved=cpu=1,memory=5Gi"
+  - "kube-reserved=cpu=250m,memory=512Mi"
+  - "eviction-hard=memory.available<300Mi,nodefs.available<10%,imagefs.available<10%"
+  # Docker images and k3s images share the 60 GB disk: clean early.
+  - "image-gc-high-threshold=75"
+  - "image-gc-low-threshold=65"

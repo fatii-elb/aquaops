@@ -1,0 +1,63 @@
+# NFR-05 : service télémétrie, 2 réplicas, sondes Actuator, mise à jour sans coupure.
+# Même modèle que deploy/k8s/assets/. L'autoscaling (HPA 2 à 6 pods, NFR-04) est la carte de E1 : il se règle sur ce Deployment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telemetry
+  namespace: aquaops
+  labels: { app: telemetry }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels: { app: telemetry }
+  template:
+    metadata:
+      labels: { app: telemetry }
+    spec:
+      terminationGracePeriodSeconds: 40   # > timeout-per-shutdown-phase (20 s)
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: telemetry
+          image: ghcr.io/fatii-elb/aquaops/telemetry:IMAGE_TAG
+          ports:
+            - { name: http, containerPort: 8081 }
+          env:
+            - { name: TELEMETRY_PORT, value: "8081" }
+            - { name: HEALTHCHECK_PORT, value: "8081" }
+            - { name: TELEMETRY_DB_URL, value: "jdbc:postgresql://postgres:5432/aquaops_telemetry" }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: aquaops-db, key: DB_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: aquaops-db, key: DB_PASSWORD } }
+            # Inscription dans Eureka : à ajouter quand le client Eureka est dans le service (carte de E1) :
+            #   EUREKA_ENABLED=true et EUREKA_URL=http://eureka:8761/eureka
+          resources:
+            requests: { cpu: 200m, memory: 384Mi }   # requests obligatoires pour que le HPA calcule l'utilisation CPU
+            limits: { cpu: "1", memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
