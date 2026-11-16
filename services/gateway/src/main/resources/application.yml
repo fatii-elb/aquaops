@@ -1,9 +1,13 @@
 server:
   port: ${GATEWAY_PORT:8080}
+  # Arret gracieux : les requetes en cours se terminent avant l'arret du pod (NFR-05, NFR-07).
+  shutdown: graceful
 
 spring:
   application:
     name: gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   cloud:
     gateway:
       server:
@@ -61,6 +65,10 @@ eureka:
 
 management:
   endpoint:
+    health:
+      # /actuator/health/liveness et /actuator/health/readiness : sondes Kubernetes (NFR-05).
+      probes:
+        enabled: true
     gateway:
       access: unrestricted
   endpoints:

@@ -9,4 +9,8 @@ public interface ReadingRepository extends JpaRepository<Reading, Long> {
 
     Page<Reading> findBySensorIdAndMeasuredAtBetweenOrderByMeasuredAtAsc(
             Long sensorId, Instant from, Instant to, Pageable pageable);
+
+    /** Vrai si ce message Kafka est deja enregistre (reprise apres une panne). */
+    boolean existsBySourcePartitionAndSourceOffsetAndSourceTimestamp(
+            Integer sourcePartition, Long sourceOffset, Long sourceTimestamp);
 }

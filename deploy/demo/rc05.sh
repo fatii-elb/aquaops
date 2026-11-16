@@ -57,7 +57,19 @@ case "$code" in 2*) ok "charge démarrée (HTTP $code)" ;; *) ko "démarrage de 
 sleep "$KILL_AFTER"
 
 etape "3. Suppression d'un pod de télémétrie"
-VICTIME=$(kubectl -n "$NS" get pods -l "$LABEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+# On supprime le pod qui LIT le topic : le topic sensor-readings n'a qu'une partition, donc un seul pod consomme et les
+# autres attendent. Supprimer un pod qui attend ne prouverait rien. (Colonne HOST de la commande describe = IP du pod.)
+HOTE=$(kubectl -n "$NS" exec "$KAFKA" -- /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group "$GROUP" 2>/dev/null | awk '$6 ~ /^[0-9]+$/ && $8 ~ /^\// {print substr($8,2); exit}')
+VICTIME=""
+if [ -n "$HOTE" ]; then
+  VICTIME=$(kubectl -n "$NS" get pods -l "$LABEL" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.podIP}{"\n"}{end}' | awk -v ip="$HOTE" '$2==ip {print $1; exit}')
+fi
+if [ -n "$VICTIME" ]; then
+  info "pod qui consomme le topic : $VICTIME (IP $HOTE)"
+else
+  VICTIME=$(kubectl -n "$NS" get pods -l "$LABEL" --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+  info "ATTENTION : pod consommateur non identifié, premier pod pris (le test peut être trop facile)"
+fi
 info "pod supprimé : $VICTIME"
 T0=$(date +%s)
 kubectl -n "$NS" delete pod "$VICTIME" --wait=false >/dev/null
@@ -100,7 +112,7 @@ STOCKEES=$(kubectl -n "$NS" exec "$PG" -- psql -U "$PGUSER" -d "$PGDB" -tA -c "S
 info "mesures stockées sur la fenêtre : ${STOCKEES:-illisible}"
 if [ -z "$ENVOYEES" ] || [ -z "$STOCKEES" ]; then ko "comptage impossible (simulateur ou base injoignable)"
 elif [ "$STOCKEES" -eq "$ENVOYEES" ]; then ok "envoyées = stockées ($ENVOYEES) : 0 perte"
-elif [ "$STOCKEES" -gt "$ENVOYEES" ]; then ko "stockées > envoyées (+$((STOCKEES-ENVOYEES))) : mesures reçues deux fois après la reprise (Kafka livre au moins une fois, la table readings n'a pas de contrainte d'unicité) : noter comme écart"
+elif [ "$STOCKEES" -gt "$ENVOYEES" ]; then ko "stockées > envoyées (+$((STOCKEES-ENVOYEES))) : doublons malgré la contrainte uk_readings_source (vérifier qu'elle existe : voir docs/reprise-kafka.md)"
 else ko "PERTE de $((ENVOYEES-STOCKEES)) mesures"; fi
 
 etape "Résultat"

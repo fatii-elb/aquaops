@@ -1,8 +1,12 @@
 server:
   port: ${SIMULATOR_PORT:8086}
+  # Arret gracieux : les requetes en cours se terminent avant l'arret du pod (NFR-05, NFR-07).
+  shutdown: graceful
 spring:
   application:
     name: simulator
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -12,6 +16,11 @@ simulator:
   sensors-file: ${SENSORS_FILE:classpath:sensors.json}
   interval-ms: ${SIM_INTERVAL_MS:1000}
 management:
+  endpoint:
+    health:
+      # /actuator/health/liveness et /actuator/health/readiness : sondes Kubernetes (NFR-05).
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:
