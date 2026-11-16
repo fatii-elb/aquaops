@@ -27,10 +27,11 @@ public class AnomalyDeduplicator {
 
     // Apres recuperation, une nouvelle anomalie
     // du meme type pourra etre detectee.
-    public synchronized void recover(
+    // Retourne true si une anomalie etait bien ouverte.
+    public synchronized boolean recover(
             int zoneId, String type) {
 
-        openAnomalies.remove(
+        return openAnomalies.remove(
                 new Key(
                         zoneId,
                         Objects.requireNonNull(type)

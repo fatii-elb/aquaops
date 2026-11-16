@@ -7,6 +7,8 @@ import { Audit } from './features/audit/audit';
 import { authGuard, roleGuard } from './core/auth.guard';
 import { IncidentCenter } from './features/incidents/incident-center/incident-center';
 import { AssetsPage } from './features/assets/assets-page/assets-page';
+import { ComingSoon } from './features/placeholder/coming-soon';
+import { AnomaliesPage } from './features/anomalies/anomalies-page';
 import { ApiReportsDataSource } from './features/reports/api-reports-data-source';
 import { MockReportsDataSource } from './features/reports/mock-reports-data-source';
 import { REPORTS_DATA_SOURCE_CONFIG, ReportsDataSource } from './features/reports/reports-data-source';
@@ -17,7 +19,20 @@ export const routes: Routes = [
   { path: 'dashboard', component: Dashboard, canActivate: [authGuard] },
   { path: 'incidents', component: IncidentCenter, canActivate: [authGuard] },
   { path: 'assets', component: AssetsPage, canActivate: [roleGuard('administrateur')] },
+  { path: 'alerts', component: AnomaliesPage, canActivate: [authGuard] },
   { path: 'incidents/:id', component: IncidentCenter, canActivate: [authGuard] },
+  {
+    path: 'telemetry',
+    component: ComingSoon,
+    canActivate: [authGuard],
+    data: { title: 'Télémétrie & Capteurs', active: 'telemetry', icon: 'sensors', description: 'Les courbes et les dernières valeurs des capteurs arrivent bientôt.' },
+  },
+  {
+    path: 'observability',
+    component: ComingSoon,
+    canActivate: [authGuard],
+    data: { title: 'Observabilité', active: 'observability', icon: 'monitor_heart', description: "Les tableaux de bord d'observabilité arrivent bientôt." },
+  },
   { path: 'administration', component: Administration, canActivate: [roleGuard('administrateur')] },
   { path: 'audit', component: Audit, canActivate: [roleGuard('superviseur', 'administrateur')] },
   {

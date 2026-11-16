@@ -6,6 +6,9 @@ import ma.aquaops.detection.model.SensorReading;
 import ma.aquaops.detection.rules.LeakRule;
 import ma.aquaops.detection.rules.Rule;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,12 +18,18 @@ import java.util.Objects;
 
 public class DetectionEngine {
 
+    private static final Logger log =
+            LoggerFactory.getLogger(DetectionEngine.class);
+
     private final List<Rule> rules;
     private final AnomalyDeduplicator deduplicator;
 
     // Derniere mesure de pompe acceptee par zone
     private final Map<Integer, Instant> lastPumpReading =
             new HashMap<>();
+
+    // Facultatif : prevenu quand une anomalie ouverte se termine (BE-1)
+    private AnomalyRecoveryListener recoveryListener;
 
     public DetectionEngine(List<Rule> rules) {
         this(rules, new AnomalyDeduplicator());
@@ -65,9 +74,8 @@ public class DetectionEngine {
 
             // Recuperation uniquement pour une mesure recente
             if ("NORMAL".equals(state)) {
-                deduplicator.recover(
-                        zone, "PUMP_FAULT"
-                );
+                notifyRecovered(zone, "PUMP_FAULT",
+                        deduplicator.recover(zone, "PUMP_FAULT"));
             }
         }
 
@@ -83,10 +91,10 @@ public class DetectionEngine {
             if (rule instanceof LeakRule leakRule
                     && leakRule.confirmsRecovery(reading)) {
 
-                deduplicator.recover(
-                        reading.zoneId(),
-                        "LEAK_SUSPECTED"
-                );
+                notifyRecovered(reading.zoneId(), "LEAK_SUSPECTED",
+                        deduplicator.recover(
+                                reading.zoneId(),
+                                "LEAK_SUSPECTED"));
             }
 
             // ETAPE 4 : Supprimer les anomalies repetees
@@ -102,5 +110,26 @@ public class DetectionEngine {
         }
 
         return published;
+    }
+
+    public synchronized void setRecoveryListener(
+            AnomalyRecoveryListener listener) {
+
+        this.recoveryListener = listener;
+    }
+
+    // Un echec de l'ecouteur ne doit jamais arreter la detection.
+    private void notifyRecovered(
+            int zoneId, String type, boolean wasOpen) {
+
+        if (!wasOpen || recoveryListener == null) {
+            return;
+        }
+        try {
+            recoveryListener.onRecovered(zoneId, type);
+        } catch (RuntimeException e) {
+            log.warn("Resolution de l'anomalie {} (zone {}) non enregistree : {}",
+                    type, zoneId, e.toString());
+        }
     }
 }

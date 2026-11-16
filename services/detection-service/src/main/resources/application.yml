@@ -7,6 +7,19 @@ server:
 spring:
   application:
     name: detection-service
+  datasource:
+    url: ${DETECTION_DB_URL:jdbc:postgresql://localhost:5432/aquaops_detection}
+    username: ${DB_USER:aquaops}
+    password: ${DB_PASSWORD:aquaops}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/aquaops}
   lifecycle:
     timeout-per-shutdown-phase: 20s
   kafka:

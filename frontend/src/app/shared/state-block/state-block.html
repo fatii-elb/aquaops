@@ -1,0 +1,37 @@
+@switch (kind()) {
+  @case ('loading') {
+    <div class="flex flex-col gap-space-sm px-space-xl pb-space-xl" data-testid="state-loading" aria-busy="true" aria-live="polite">
+      @for (n of skeleton(); track n) {
+        <div class="h-11 animate-pulse rounded-lg bg-surface-container-low"></div>
+      }
+      <span class="sr-only">Chargement en cours…</span>
+    </div>
+  }
+  @case ('empty') {
+    <div class="flex flex-col items-center gap-space-sm px-space-xl pb-space-2xl pt-space-xl text-center" data-testid="state-empty">
+      <span class="flex h-14 w-14 items-center justify-center rounded-full bg-primary-fixed text-primary">
+        <span class="material-symbols-outlined text-[28px]">{{ icon() }}</span>
+      </span>
+      @if (title()) {
+        <h2 class="font-headline-md text-headline-md text-on-surface">{{ title() }}</h2>
+      }
+      @if (message()) {
+        <p class="max-w-md font-body-md text-body-md text-on-surface-variant">{{ message() }}</p>
+      }
+      <ng-content />
+    </div>
+  }
+  @case ('error') {
+    <div role="alert" data-testid="state-error"
+      class="mx-space-xl mb-space-xl flex items-center justify-between gap-space-md rounded-xl bg-error-container px-space-xl py-space-md text-on-error-container">
+      <div class="flex items-center gap-space-sm">
+        <span class="material-symbols-outlined text-[20px]">error</span>
+        <p class="font-body-md text-body-md">{{ message() || 'Une erreur est survenue.' }}</p>
+      </div>
+      @if (retryable()) {
+        <button type="button" data-testid="state-retry" (click)="retry.emit()"
+          class="shrink-0 rounded-lg bg-surface-container-lowest px-space-md py-space-xs font-label-md text-label-md text-error shadow-sm">Réessayer</button>
+      }
+    </div>
+  }
+}
