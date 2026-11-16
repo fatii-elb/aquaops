@@ -22,6 +22,18 @@ spring:
         order_inserts: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # NFR-05 : l'offset n'est valide qu'apres le traitement du lot (jamais avant), donc une mesure n'est jamais perdue
+      # (au pire elle est relue : le doublon est ignore, voir ReadingMeasureSink).
+      enable-auto-commit: false
+      # Un nouveau groupe relit tout le topic plutot que de sauter des mesures.
+      auto-offset-reset: earliest
+      properties:
+        # Un pod tue sans prevenir est declare mort apres 15 s : un autre pod reprend la partition.
+        session.timeout.ms: 15000
+        heartbeat.interval.ms: 5000
+    listener:
+      ack-mode: batch
 management:
   endpoint:
     health:

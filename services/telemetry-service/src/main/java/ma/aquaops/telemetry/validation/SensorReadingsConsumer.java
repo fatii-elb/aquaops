@@ -1,6 +1,7 @@
 package ma.aquaops.telemetry.validation;
 
 import java.util.Map;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import ma.aquaops.telemetry.readings.MeasureSink;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -21,13 +22,19 @@ public class SensorReadingsConsumer {
         this.processor = new MeasureProcessor(new MeasureValidator(), sink);
     }
 
+    /** La partition, l'offset et l'horodatage du message servent a ignorer un message livre deux fois. */
     @KafkaListener(topics = "sensor-readings", groupId = "telemetry-validation")
-    public void onMessage(String json) {
-        handle(json);
+    public void onMessage(ConsumerRecord<String, String> record) {
+        handle(record.value(), new KafkaSource(record.partition(), record.offset(), record.timestamp()));
     }
 
     /** Retourne true si la mesure a été acceptée. */
     public boolean handle(String json) {
+        return handle(json, null);
+    }
+
+    /** Idem, avec l'origine Kafka du message (null hors Kafka). */
+    public boolean handle(String json, KafkaSource source) {
         Map<String, Object> mesure;
         try {
             mesure = mapper.readValue(json, new TypeReference<Map<String, Object>>() { });
@@ -35,7 +42,7 @@ public class SensorReadingsConsumer {
             processor.reject("JSON illisible (" + e.getClass().getSimpleName() + ")");
             return false;
         }
-        return processor.process(mesure);
+        return processor.process(mesure, source);
     }
 
     public long acceptedCount() {
