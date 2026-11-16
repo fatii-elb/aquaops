@@ -1,0 +1,32 @@
+/* Version imprimable de Rapports & Analyses (FE-13) : seul le contenu du rapport reste à l'écran de l'imprimante. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  app-shell aside,
+  app-shell header,
+  app-notification-toasts,
+  .no-print {
+    display: none !important;
+  }
+  app-shell .pl-72 {
+    padding-left: 0 !important;
+  }
+  app-shell main {
+    padding-top: 0 !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .report-table {
+    font-size: 11px;
+  }
+  .report-table thead {
+    display: table-header-group;
+  }
+  .report-table tr,
+  .report-block {
+    break-inside: avoid;
+  }
+}
