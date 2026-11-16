@@ -16,6 +16,9 @@ export class Dashboard implements OnDestroy {
   // Le journal d'audit est reserve aux superviseurs et administrateurs (FR-24).
   canSeeAudit = this.auth.hasAnyRole(['superviseur', 'administrateur']);
 
+  // Rapports & Analyses : superviseurs et administrateurs (FE-10, FE-13).
+  canSeeReports = this.auth.hasAnyRole(['superviseur', 'administrateur']);
+
   // Nom de l'utilisateur connecté (lu dans le jeton Keycloak).
   userName = this.auth.username || 'GouloJK';
 
