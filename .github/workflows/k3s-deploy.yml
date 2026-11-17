@@ -1,0 +1,146 @@
+# =============================================================================
+# AquaOps: deploy ONE commit of main to a k3s environment (SCRUM-56 / NFR-09).
+# Card SCRUM-56 · E5.
+#
+# PREPARED, NOT ACTIVE. Two locks, both needed to deploy anything:
+#   1. Trigger: workflow_dispatch only (a person starts it, from main). The
+#      automatic trigger after a successful Images run on main is written
+#      below, COMMENTED OUT, until it is reviewed and approved.
+#   2. Switch: repository variable K3S_DEPLOY (Settings > Variables). Unset or
+#      anything but "on" = the policy job stops the run.
+#
+# Never runs code from a pull request: no pull_request / pull_request_target
+# trigger, the policy job refuses any ref but main and any SHA that is not on
+# main, and the deploy job checks out nothing: the privileged wrapper on the
+# host (deploy/vm/aquaops-k3s-deploy, NOT INSTALLED YET, see
+# deploy/terraform/README.md § 10) fetches main itself and verifies again.
+#
+# Self-hosted runner: label aquaops-k3s, its OWN runner (not aquaops-test),
+# reachable only by this workflow's deploy job. The repository is public:
+# Settings > Actions > "Require approval for all outside collaborators" must
+# stay on, and the runner should be started only for a deployment window.
+#
+# What the deploy job does, through the wrapper (one sudo rule):
+#   import-images.sh  pull ghcr.io/...:<sha> (job token, packages: read, on
+#                     stdin), check the revision label, import into k3s
+#   deploy-services.sh  tf.sh apply with services_image_tag=<sha>, verify
+#                     (rollouts, images, gateway routes), roll back to the
+#                     previous SHA on failure, push-to-healthy (NFR-09) in the
+#                     job summary
+# =============================================================================
+
+name: k3s deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: k3s environment (only the disposable one for now)
+        type: choice
+        options: [rc11]
+        default: rc11
+      sha:
+        description: Full SHA of a commit of main whose Images run succeeded
+        type: string
+        required: true
+  # AUTOMATIC TRIGGER: keep commented out until reviewed and approved.
+  # workflow_run:
+  #   workflows: [Images]
+  #   types: [completed]
+  #   branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: k3s-deploy-${{ inputs.environment || 'rc11' }}
+  cancel-in-progress: false
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # GitHub-hosted: decides whether this run may deploy. No secret, read-only.
+  # ---------------------------------------------------------------------------
+  policy:
+    name: Deployment policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      sha: ${{ steps.check.outputs.sha }}
+      environment: ${{ steps.check.outputs.environment }}
+      pushed_at: ${{ steps.check.outputs.pushed_at }}
+    steps:
+      - name: Check switch, ref, commit and Images result
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SWITCH: ${{ vars.K3S_DEPLOY }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
+          INPUT_SHA: ${{ inputs.sha }}
+          INPUT_ENV: ${{ inputs.environment }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          RUN_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$*"; exit 1; }
+          [ "$SWITCH" = "on" ] || fail "k3s deployment is off (repository variable K3S_DEPLOY is not 'on')"
+          [ "$REPO" = "fatii-elb/aquaops" ] || fail "not the AquaOps repository"
+          case "$EVENT" in
+            workflow_dispatch)
+              [ "$REF" = "refs/heads/main" ] || fail "run it from main only (got $REF)"
+              sha="$INPUT_SHA"; env_name="$INPUT_ENV" ;;
+            workflow_run)
+              [ "$RUN_CONCLUSION" = success ] || fail "Images run did not succeed"
+              [ "$RUN_EVENT" = push ] && [ "$RUN_REPO" = "$REPO" ] || fail "Images run was not a push to this repository"
+              sha="$RUN_SHA"; env_name=rc11 ;;
+            *) fail "unexpected event $EVENT" ;;
+          esac
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "not a full commit SHA: $sha"
+          [ "$env_name" = rc11 ] || fail "environment $env_name is not deployable"
+          # The commit must be on main (identical or behind).
+          status="$(gh api "repos/$REPO/compare/$sha...main" --jq .status)"
+          case "$status" in identical|ahead) ;; *) fail "$sha is not on main ($status)";; esac
+          # A successful Images run must exist for it: CI, Gitleaks, Trivy and
+          # the GHCR push of the scanned images all passed.
+          ok="$(gh api "repos/$REPO/actions/workflows/publish.yml/runs?head_sha=$sha&event=push&status=success" --jq '.total_count')"
+          [ "$ok" -ge 1 ] || fail "no successful Images run for $sha"
+          pushed_at="$(gh api "repos/$REPO/commits/$sha" --jq '.commit.committer.date')"
+          pushed_at="$(date -d "$pushed_at" +%s)"
+          {
+            echo "sha=$sha"; echo "environment=$env_name"; echo "pushed_at=$pushed_at"
+          } >> "$GITHUB_OUTPUT"
+          echo "Deploying $sha to $env_name (commit time $pushed_at)"
+
+  # ---------------------------------------------------------------------------
+  # Self-hosted, privileged host. No checkout, no repository code run here:
+  # only the wrapper the administrator installed from a reviewed main.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy and verify (k3s)
+    needs: policy
+    runs-on: [self-hosted, aquaops-k3s]
+    environment: k3s-${{ needs.policy.outputs.environment }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Deploy through the aquaops-k3s-deploy wrapper
+        env:
+          SHA: ${{ needs.policy.outputs.sha }}
+          ENV_NAME: ${{ needs.policy.outputs.environment }}
+          PUSHED_AT: ${{ needs.policy.outputs.pushed_at }}
+          GHCR_USERNAME: ${{ github.actor }}
+          DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [[ "$PUSHED_AT" =~ ^[0-9]+$ ]] && [ "$ENV_NAME" = rc11 ] \
+            || { echo "::error::invalid policy outputs"; exit 1; }
+          printf '%s\n%s\n' "$DEPLOY_TOKEN" "$GHCR_USERNAME" \
+            | sudo -n -u aquaops-k3s-deploy /usr/local/sbin/aquaops-k3s-deploy "$ENV_NAME" "$SHA" "$PUSHED_AT" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
