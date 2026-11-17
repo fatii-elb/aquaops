@@ -6,12 +6,15 @@ import { Administration } from './features/administration/administration';
 import { Audit } from './features/audit/audit';
 import { authGuard, roleGuard } from './core/auth.guard';
 import { IncidentCenter } from './features/incidents/incident-center/incident-center';
+import { SensorList } from './features/telemetry/sensor-list';
 
 export const routes: Routes = [
   { path: 'login', component: Login },
   { path: 'dashboard', component: Dashboard, canActivate: [authGuard] },
   { path: 'incidents', component: IncidentCenter, canActivate: [authGuard] },
   { path: 'incidents/:id', component: IncidentCenter, canActivate: [authGuard] },
+  { path: 'telemetry', component: SensorList, canActivate: [roleGuard('operateur', 'superviseur', 'administrateur')] },
+  { path: 'telemetry/:sensorId', component: SensorList, canActivate: [roleGuard('operateur', 'superviseur', 'administrateur')] },
   { path: 'administration', component: Administration, canActivate: [roleGuard('administrateur')] },
   { path: 'audit', component: Audit, canActivate: [roleGuard('superviseur', 'administrateur')] },
   { path: 'forbidden', component: Forbidden },

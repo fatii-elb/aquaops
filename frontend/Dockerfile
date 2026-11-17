@@ -34,7 +34,12 @@ FROM nginxinc/nginx-unprivileged:1.30-alpine
 # Valeurs par defaut = environnement local. Elles sont remplacees par -e ... ou par le compose.
 ENV GATEWAY_URL=http://gateway:8080 \
     KEYCLOAK_ISSUER=http://localhost:8180/realms/aquaops \
-    KEYCLOAK_CLIENT_ID=aquaops-frontend
+    KEYCLOAK_CLIENT_ID=aquaops-frontend \
+    ASSETS_API_BASE_URL=/api/assets \
+    TELEMETRY_API_BASE_URL=/api/telemetry \
+    SENSORS_MODE=api \
+    SENSOR_SILENCE_THRESHOLD_SECONDS=10 \
+    SENSOR_LOOKBACK_SECONDS=120
 
 # L'application compilee. L'utilisateur nginx doit pouvoir ecrire config.json dans ce dossier.
 USER root

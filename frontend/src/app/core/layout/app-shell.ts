@@ -32,7 +32,7 @@ export class AppShell {
   protected readonly nav: NavItem[] = [
     { key: 'dashboard', icon: 'grid_view', label: 'Tableau de bord', link: '/dashboard' },
     { key: 'assets', icon: 'hub', label: 'Réseau & Actifs' },
-    { key: 'telemetry', icon: 'sensors', label: 'Télémétrie & Capteurs' },
+    { key: 'telemetry', icon: 'sensors', label: 'Télémétrie & Capteurs', link: '/telemetry' },
     { key: 'alerts', icon: 'warning', label: 'Alertes & Anomalies' },
     { key: 'incidents', icon: 'emergency', label: 'Incidents', link: '/incidents' },
     { key: 'interventions', icon: 'engineering', label: 'Interventions' },
