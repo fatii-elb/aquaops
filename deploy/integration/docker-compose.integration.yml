@@ -208,6 +208,12 @@ services:
     <<: *java-service
     image: aquaops/simulator:dev
     build: { <<: *java-build, context: ../../services/simulator }
+    environment:
+      GATEWAY_URL: http://gateway:8080
+      SIMULATOR_API_KEY: ${SIMULATOR_API_KEY:?SIMULATOR_API_KEY is required, see .env.example}
+    depends_on:
+      gateway: { condition: service_healthy }
+      telemetry: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8086/actuator/health"]
       interval: 10s
@@ -228,6 +234,8 @@ services:
       INCIDENTS_URL: http://incidents:8084
       NOTIFICATIONS_URL: http://notifications:8085
       SIMULATOR_URL: http://simulator:8086
+      SIMULATOR_API_KEY: ${SIMULATOR_API_KEY:?SIMULATOR_API_KEY is required, see .env.example}
+      TELEMETRY_INGEST_RATE_LIMIT: ${TELEMETRY_INGEST_RATE_LIMIT:-500}
     # No depends_on: routes are resolved per request, so the gateway starts
     # even if one backend is down (that backend then answers 5xx).
     healthcheck:

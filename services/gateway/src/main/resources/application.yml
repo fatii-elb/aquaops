@@ -56,6 +56,9 @@ aquaops:
       incidents: ${INCIDENTS_URL:http://localhost:8084}
       notifications: ${NOTIFICATIONS_URL:http://localhost:8085}
       simulator: ${SIMULATOR_URL:http://localhost:8086}
+  telemetry-ingest:
+    api-key: ${SIMULATOR_API_KEY:local-dev-only}
+    requests-per-second: ${TELEMETRY_INGEST_RATE_LIMIT:500}
 
 # Eureka is off by default: the gateway never needs a registry to start.
 # Turn it on with SPRING_PROFILES_ACTIVE=eureka (application-eureka.yml).

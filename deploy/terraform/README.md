@@ -26,9 +26,10 @@ deploy/terraform/
 | ResourceQuota | `aquaops-quota` | Plafond du namespace (mémoire, CPU, pods, volumes) ; ni NodePort ni LoadBalancer |
 | LimitRange | `aquaops-limits` | Valeurs par défaut et maximum par conteneur |
 | NetworkPolicy | `default-deny-ingress`, `allow-same-namespace`, `allow-ingress-controller` | Rien n'entre sauf depuis le même namespace ; Traefik n'atteint que les pods `aquaops.ma/ingress=true` |
-| ConfigMap | `aquaops-config` | Adresses internes communes (`DB_HOST`, `KAFKA_BOOTSTRAP_SERVERS`, `EUREKA_URL`, `KEYCLOAK_ISSUER_URI`…), aucun secret |
+| ConfigMap | `aquaops-config` | Adresses internes communes (`DB_HOST`, `KAFKA_BOOTSTRAP_SERVERS`, `EUREKA_URL`, `GATEWAY_URL`, limite d'ingestion…), aucun secret |
 | Secret | `aquaops-db` | `DB_USER`, `DB_PASSWORD` (nom attendu par `deploy/k8s/assets`) |
 | Secret | `aquaops-keycloak` | `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_AUDIT_CLIENT_SECRET` |
+| Secret | `aquaops-simulator` | `SIMULATOR_API_KEY` (partagée par le simulateur et la gateway, SCRUM-65) |
 | Secret | `ghcr-pull` | **Désactivé** (`ghcr_pull_secret = false`, décision du 15/11/2026) : aucun jeton GHCR dans Kubernetes |
 | ServiceAccount | `default` | Aucun jeton d'API monté par défaut ; utiliserait `ghcr-pull` s'il était activé |
 
@@ -62,6 +63,7 @@ sudoedit /etc/aquaops-terraform/test.env
 #   TF_VAR_keycloak_admin=...
 #   TF_VAR_keycloak_admin_password=...
 #   TF_VAR_keycloak_audit_client_secret=...
+#   TF_VAR_simulator_api_key=...
 ```
 
 Pour `rc11` : un fichier `/etc/aquaops-terraform/rc11.env` avec **d'autres**
@@ -259,13 +261,13 @@ VM) garde `services_enabled = false` et les services de Docker Compose.
 
 | Service | Fichier | Port | Réplicas | Variables (comme `deploy/test/compose.yml`) | Mémoire demandée / limite | Mesurée au repos |
 | --- | --- | --- | --- | --- | --- | --- |
-| `gateway` | `services.tf` | 8080 | 1 | ConfigMap `gateway-routes` (profil `eureka`, `*_URL` fixes sauf `gateway_eureka_routes`, actuator `health` seul), `EUREKA_URL` | 256 / 512 Mi | 237 Mi |
+| `gateway` | `services.tf` | 8080 | 1 | ConfigMap `gateway-routes` (profil `eureka`, `*_URL` fixes sauf `gateway_eureka_routes`, actuator `health` seul), `EUREKA_URL`, limite 500 req/s, clé `SIMULATOR_API_KEY` | 256 / 512 Mi | 237 Mi |
 | `telemetry` | `e2_services.tf` (**manifeste de E2**) | 8081 | 2 (E2) | ceux de E2 | 384 / 768 Mi × 2 | 275 et 284 Mi |
 | `assets` | `e2_services.tf` (**manifeste de E2**) | 8082 | 2 (E2) | ceux de E2 + audit des connexions (`AUDIT_KEYCLOAK_ENABLED`, `KEYCLOAK_BASE_URL`, secret) comme `compose.infra.yml` | 384 / 768 Mi × 2 | 345 et 338 Mi |
 | `detection` | `services.tf` | 8083 | 1 | depuis la PR #116 : `DETECTION_DB_URL` (base `aquaops_detection`, construite depuis `DB_HOST`/`DB_PORT`), `DB_*`, `KEYCLOAK_ISSUER_URI` (même émetteur qu'assets), `KAFKA_BOOTSTRAP_SERVERS` | 384 / 640 Mi (JPA depuis #116) | 189 Mi avant #116 ; 277 Mi avec #116 |
 | `incidents` | `services.tf` | 8084 | 1 | `INCIDENTS_DB_URL` (construite depuis `DB_HOST`/`DB_PORT` de `aquaops-config`), `KAFKA_BOOTSTRAP_SERVERS`, `DB_*` | 384 / 640 Mi | 295 Mi |
 | `notifications` | `services.tf` | 8085 | 1 | `NOTIFICATIONS_DB_URL` (idem), `KAFKA_BOOTSTRAP_SERVERS`, `DB_*`, `SPRING_JPA_SHOW_SQL=false` | 384 / 640 Mi | 287 Mi |
-| `simulator` | `services.tf` | 8086 | 1 | `KAFKA_BOOTSTRAP_SERVERS` | 192 / 384 Mi | 186 Mi |
+| `simulator` | `services.tf` | 8086 | 1 | `GATEWAY_URL`, secret `SIMULATOR_API_KEY` | 192 / 384 Mi | 186 Mi |
 
 Mesures `kubectl top` dans le bac à sable (16/11/2026, au repos, simulateur
 actif). Namespace `rc11` entier : **4,0 Gio** et 1,2 CPU (13 pods, infrastructure comprise ; mesure prise quelques minutes après un retour arrière, CPU d'assets et de la gateway encore en chauffe) ; nœud : 6,0 Gio (k3s, add-ons, `rc11` et le namespace `test` vide).

@@ -57,7 +57,7 @@ locals {
     gateway = {
       memory      = ["256Mi", "512Mi"]
       env         = {} # routing: ConfigMap gateway-routes (below)
-      from_config = ["EUREKA_URL"]
+      from_config = ["EUREKA_URL", "TELEMETRY_INGEST_RATE_LIMIT"]
       db          = false
       ingress     = true
     }
@@ -90,7 +90,7 @@ locals {
     simulator = {
       memory      = ["192Mi", "384Mi"]
       env         = {}
-      from_config = ["KAFKA_BOOTSTRAP_SERVERS"]
+      from_config = ["GATEWAY_URL"]
       db          = false
       ingress     = false
     }
@@ -266,6 +266,19 @@ resource "kubernetes_deployment_v1" "service" {
                 secret_key_ref {
                   name = kubernetes_secret_v1.db.metadata[0].name
                   key  = env.value
+                }
+              }
+            }
+          }
+
+          dynamic "env" {
+            for_each = contains(["gateway", "simulator"], each.key) ? [1] : []
+            content {
+              name = "SIMULATOR_API_KEY"
+              value_from {
+                secret_key_ref {
+                  name = kubernetes_secret_v1.simulator[0].metadata[0].name
+                  key  = "SIMULATOR_API_KEY"
                 }
               }
             }
