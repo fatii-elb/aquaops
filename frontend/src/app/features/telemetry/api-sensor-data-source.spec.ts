@@ -78,4 +78,41 @@ describe('ApiSensorDataSource', () => {
       }),
     ]);
   });
+
+  it('loads all pages of a sensor history in ascending API order', () => {
+    const from = new Date('2026-11-17T00:00:00Z');
+    const to = new Date('2026-11-18T00:00:00Z');
+    let readings: unknown;
+    source.getHistory(config, 12, from, to).subscribe((result) => (readings = result));
+
+    const first = http.expectOne((request) =>
+      request.url === '/api/telemetry/readings'
+      && request.params.get('sensor') === '12'
+      && request.params.get('page') === '0',
+    );
+    expect(first.request.params.get('from')).toBe(from.toISOString());
+    expect(first.request.params.get('to')).toBe(to.toISOString());
+    expect(first.request.params.get('size')).toBe('1000');
+    first.flush({
+      content: [{ id: 1, sensorId: 12, value: 2.1, unit: 'bar', pumpState: null, measuredAt: '2026-11-17T10:00:00Z' }],
+      page: 0,
+      totalPages: 2,
+    });
+
+    const second = http.expectOne((request) =>
+      request.url === '/api/telemetry/readings'
+      && request.params.get('sensor') === '12'
+      && request.params.get('page') === '1',
+    );
+    second.flush({
+      content: [{ id: 2, sensorId: 12, value: 2.3, unit: 'bar', pumpState: null, measuredAt: '2026-11-17T11:00:00Z' }],
+      page: 1,
+      totalPages: 2,
+    });
+
+    expect(readings).toEqual([
+      { value: 2.1, unit: 'bar', pumpState: null, measuredAt: '2026-11-17T10:00:00Z' },
+      { value: 2.3, unit: 'bar', pumpState: null, measuredAt: '2026-11-17T11:00:00Z' },
+    ]);
+  });
 });

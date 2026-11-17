@@ -10,6 +10,7 @@ import { routes } from '../../app.routes';
 import { Observability } from '../observability/observability';
 import { Reports } from '../reports/reports';
 import { SensorList } from '../telemetry/sensor-list';
+import { SensorHistory } from '../telemetry/sensor-history';
 
 function render(data: Record<string, unknown>): HTMLElement {
   TestBed.configureTestingModule({
@@ -42,7 +43,7 @@ describe('ComingSoon', () => {
   });
 });
 
-describe('routes des pages d\'attente (FE-6)', () => {
+describe('routes des pages fonctionnelles et d’attente', () => {
   it('/observability utilise la vraie page FE-11, avec garde de rôle et source mock', () => {
     const route = routes.find((r) => r.path === 'observability');
     expect(route).toBeDefined();
@@ -51,11 +52,14 @@ describe('routes des pages d\'attente (FE-6)', () => {
     expect(route?.providers?.length).toBeGreaterThan(0);
   });
 
-  it('/telemetry utilise la liste FE-7, avec une route détaillée par capteur', () => {
+  it('/telemetry utilise la liste FE-7 et sa route détaillée affiche l’historique FE-8', () => {
     const route = routes.find((r) => r.path === 'telemetry');
+    const detailRoute = routes.find((r) => r.path === 'telemetry/:sensorId');
     expect(route?.component).toBe(SensorList);
     expect(route?.canActivate?.length).toBe(1);
-    expect(routes.some((item) => item.path === 'telemetry/:sensorId')).toBe(true);
+    expect(detailRoute?.component).toBe(SensorHistory);
+    expect(detailRoute?.canActivate?.length).toBe(1);
+    expect(detailRoute?.providers?.length).toBe(1);
   });
 
   it('/reports utilise la véritable page Rapports FE-10 avec contrôle d’accès', () => {

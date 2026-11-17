@@ -10,17 +10,6 @@
       <span class="font-label-sm text-label-sm text-secondary" data-testid="refresh-rate">Actualisation automatique toutes les 5 s</span>
     </div>
 
-    @if (selectedSensorId(); as sensorId) {
-      <div class="mb-space-md flex flex-wrap items-center justify-between gap-space-sm rounded-xl bg-primary-container/40 px-space-lg py-space-md">
-        <p class="font-body-md text-body-md text-on-surface">
-          Capteur #{{ sensorId }} sélectionné. L’historique détaillé sera affiché dans FE-8.
-        </p>
-        <a routerLink="/telemetry" class="rounded-lg bg-surface-container-lowest px-space-md py-space-xs font-label-md text-label-md font-semibold text-primary">
-          Retour à la liste
-        </a>
-      </div>
-    }
-
     <div class="mb-space-lg grid grid-cols-1 gap-space-md sm:grid-cols-3">
       <article class="rounded-xl bg-surface-container-lowest p-space-lg shadow-sm">
         <p class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Capteurs suivis</p>
