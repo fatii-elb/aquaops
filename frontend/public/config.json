@@ -1,4 +1,9 @@
 {
   "issuer": "http://localhost:8180/realms/aquaops",
-  "clientId": "aquaops-frontend"
+  "clientId": "aquaops-frontend",
+  "assetsBaseUrl": "/api/assets",
+  "telemetryBaseUrl": "/api/telemetry",
+  "sensorDataMode": "mock",
+  "sensorSilenceThresholdSeconds": 10,
+  "sensorLookbackSeconds": 120
 }

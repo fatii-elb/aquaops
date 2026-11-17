@@ -1,4 +1,9 @@
 {
   "issuer": "${KEYCLOAK_ISSUER}",
-  "clientId": "${KEYCLOAK_CLIENT_ID}"
+  "clientId": "${KEYCLOAK_CLIENT_ID}",
+  "assetsBaseUrl": "${ASSETS_API_BASE_URL}",
+  "telemetryBaseUrl": "${TELEMETRY_API_BASE_URL}",
+  "sensorDataMode": "${SENSORS_MODE}",
+  "sensorSilenceThresholdSeconds": ${SENSOR_SILENCE_THRESHOLD_SECONDS},
+  "sensorLookbackSeconds": ${SENSOR_LOOKBACK_SECONDS}
 }

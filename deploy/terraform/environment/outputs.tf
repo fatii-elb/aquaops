@@ -25,3 +25,29 @@ output "infrastructure" {
     eureka   = "${kubernetes_service_v1.eureka[0].metadata[0].name}:8761"
   } : null
 }
+
+output "services" {
+  description = "The 7 services and their address inside the namespace (null when services_enabled = false)."
+  value = var.services_enabled ? merge(
+    { for name, svc in kubernetes_service_v1.service : name => "${svc.metadata[0].name}:${local.service_ports[name]}" },
+    { for name in local.e2_services : name => "${name}:${local.service_ports[name]}" },
+  ) : null
+}
+
+output "services_images" {
+  description = "Image reference of each service. The deploy script reads it before an update to know what to roll back to."
+  value       = var.services_enabled ? { for name in keys(local.service_ports) : name => local.service_image[name] } : null
+}
+
+output "services_image_tag" {
+  description = "Commit SHA currently deployed (null when services_enabled = false)."
+  value       = var.services_enabled ? var.services_image_tag : null
+}
+
+output "gateway_routes" {
+  description = "How the gateway reaches each service: lb:// (Eureka) or a fixed address."
+  value = var.services_enabled ? merge(
+    { for name in var.gateway_eureka_routes : name => "lb://${name == "simulator" ? "simulator" : "${name}-service"}" },
+    { for k, v in local.gateway_fixed_routes : lower(trimsuffix(k, "_URL")) => v },
+  ) : null
+}
