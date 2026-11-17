@@ -40,7 +40,7 @@ export class AppShell {
     { key: 'incidents', icon: 'emergency', label: 'Incidents', link: '/incidents' },
     { key: 'interventions', icon: 'engineering', label: 'Interventions' },
     { key: 'reports', icon: 'analytics', label: 'Rapports & Analyses', link: '/reports' },
-    { key: 'observability', icon: 'monitor_heart', label: 'Observabilité', link: '/observability' },
+    { key: 'observability', icon: 'monitor_heart', label: 'Observabilité', link: '/observability', roles: ['superviseur', 'administrateur'] },
     { key: 'admin', icon: 'admin_panel_settings', label: 'Administration', link: '/administration' },
   ];
 

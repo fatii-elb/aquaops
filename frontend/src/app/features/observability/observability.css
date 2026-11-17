@@ -1,0 +1,13 @@
+/* Pastilles d'état (FE-11). Classes utilitaires ajoutées au span, en plus de Tailwind. */
+.state-up {
+  background-color: var(--color-success-container, #c8e6c9);
+  color: var(--color-on-success-container, #1b5e20);
+}
+.state-down {
+  background-color: var(--color-error-container);
+  color: var(--color-on-error-container);
+}
+.state-unknown {
+  background-color: var(--color-surface-container-high);
+  color: var(--color-on-surface-variant);
+}
