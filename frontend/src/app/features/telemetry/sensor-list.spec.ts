@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import { AuthService } from '../../core/auth.service';
 import { NotificationStream } from '../../core/notification-stream';
 import { SensorDataSource } from './sensor-data-source';
-import { SensorRow } from './sensor.model';
+import { SensorReading, SensorRow } from './sensor.model';
 import { SensorList } from './sensor-list';
 
 const rows: SensorRow[] = [
@@ -45,6 +45,10 @@ class StubSensorDataSource extends SensorDataSource {
   getSensors(): Observable<SensorRow[]> {
     this.calls++;
     return this.fail ? throwError(() => new Error('API indisponible')) : of(rows);
+  }
+
+  getHistory(_sensorId: number, _from: Date, _to: Date): Observable<SensorReading[]> {
+    return of([]);
   }
 }
 

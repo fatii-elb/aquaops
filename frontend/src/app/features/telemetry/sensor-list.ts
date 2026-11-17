@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { RouterLink } from '@angular/router';
 import { AppShell } from '../../core/layout/app-shell';
 import { SensorDataSource } from './sensor-data-source';
 import { SensorRow, SensorState, SensorType } from './sensor.model';
@@ -15,7 +15,6 @@ const REFRESH_MS = 5000;
 })
 export class SensorList {
   private readonly source = inject(SensorDataSource);
-  private readonly route = inject(ActivatedRoute);
 
   protected readonly sensors = signal<SensorRow[]>([]);
   protected readonly loading = signal(true);
@@ -25,12 +24,6 @@ export class SensorList {
   protected readonly typeFilter = signal('');
   protected readonly stateFilter = signal('');
   protected readonly search = signal('');
-  protected readonly routeParams = toSignal(this.route.paramMap, { initialValue: this.route.snapshot.paramMap });
-
-  protected readonly selectedSensorId = computed(() => {
-    const id = Number(this.routeParams()?.get('sensorId'));
-    return Number.isInteger(id) && id > 0 ? id : null;
-  });
 
   protected readonly zones = computed(() => {
     const unique = new Map<number, string>();

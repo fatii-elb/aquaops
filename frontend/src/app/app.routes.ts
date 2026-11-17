@@ -7,6 +7,11 @@ import { Audit } from './features/audit/audit';
 import { authGuard, roleGuard } from './core/auth.guard';
 import { IncidentCenter } from './features/incidents/incident-center/incident-center';
 import { SensorList } from './features/telemetry/sensor-list';
+import { SensorHistory } from './features/telemetry/sensor-history';
+import { AnomalyDataSource } from './features/anomalies/anomaly-data-source';
+import { ANOMALY_DATA_SOURCE_CONFIG } from './features/anomalies/anomaly-data-source.config';
+import { ApiAnomalyDataSource } from './features/anomalies/api-anomaly-data-source';
+import { MockAnomalyDataSource } from './features/anomalies/mock-anomaly-data-source';
 import { AssetsPage } from './features/assets/assets-page/assets-page';
 import { ComingSoon } from './features/placeholder/coming-soon';
 import { AnomaliesPage } from './features/anomalies/anomalies-page';
@@ -27,7 +32,17 @@ export const routes: Routes = [
     component: SensorList,
     canActivate: [roleGuard('operateur', 'superviseur', 'administrateur')],
   },
-  { path: 'telemetry/:sensorId', component: SensorList, canActivate: [roleGuard('operateur', 'superviseur', 'administrateur')] },
+  {
+    path: 'telemetry/:sensorId',
+    component: SensorHistory,
+    canActivate: [roleGuard('operateur', 'superviseur', 'administrateur')],
+    providers: [
+      {
+        provide: AnomalyDataSource,
+        useClass: ANOMALY_DATA_SOURCE_CONFIG.mode === 'mock' ? MockAnomalyDataSource : ApiAnomalyDataSource,
+      },
+    ],
+  },
   {
     path: 'observability',
     component: ComingSoon,

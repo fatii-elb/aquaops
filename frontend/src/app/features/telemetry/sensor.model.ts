@@ -14,3 +14,10 @@ export interface SensorRow {
   measuredAt: string | null;
   state: SensorState;
 }
+
+export interface SensorReading {
+  value: number | null;
+  unit: string | null;
+  pumpState: string | null;
+  measuredAt: string;
+}

@@ -1,0 +1,334 @@
+<app-shell title="Historique du capteur" active="telemetry">
+  <div class="mx-auto w-full max-w-7xl px-space-xl pb-space-3xl pt-space-xl">
+    <div class="mb-space-lg flex flex-wrap items-start justify-between gap-space-md">
+      <div>
+        <a
+          routerLink="/telemetry"
+          class="font-label-md text-label-md font-semibold text-primary hover:underline"
+        >
+          ← Retour à la liste des capteurs
+        </a>
+        @if (sensor(); as selected) {
+          <h1 class="mt-space-sm font-headline-lg text-headline-lg font-bold text-on-surface">
+            #{{ selected.id }} · {{ selected.name }}
+          </h1>
+          <p class="mt-space-xs font-body-md text-body-md text-secondary">
+            {{ typeLabel(selected.type) }} · {{ selected.zoneName }} · {{ selected.assetName }}
+          </p>
+        } @else {
+          <h1 class="mt-space-sm font-headline-lg text-headline-lg font-bold text-on-surface">
+            Historique du capteur
+          </h1>
+        }
+      </div>
+      <div class="flex flex-wrap gap-space-sm">
+        <button
+          type="button"
+          data-testid="export-csv"
+          (click)="exportCsv()"
+          [disabled]="readings().length === 0"
+          class="rounded-lg bg-primary px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-primary hover:opacity-90 disabled:opacity-50"
+        >
+          Exporter CSV
+        </button>
+        <button
+          type="button"
+          data-testid="reload-history"
+          (click)="reload()"
+          class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface hover:bg-surface-container-highest"
+        >
+          Actualiser
+        </button>
+      </div>
+    </div>
+
+    <section
+      class="mb-space-lg flex flex-wrap items-center gap-space-sm rounded-xl bg-surface-container-lowest p-space-lg shadow-sm"
+      aria-label="Période de l’historique"
+    >
+      <span class="mr-space-xs font-label-sm text-label-sm font-semibold text-secondary"
+        >Période :</span
+      >
+      @for (item of periods; track item.value) {
+        <button
+          type="button"
+          [attr.data-testid]="'period-' + item.value"
+          [attr.aria-pressed]="period() === item.value"
+          (click)="selectPeriod(item.value)"
+          class="rounded-lg px-space-md py-space-xs font-label-md text-label-md font-semibold"
+          [class.bg-primary]="period() === item.value"
+          [class.text-on-primary]="period() === item.value"
+          [class.bg-surface-container-high]="period() !== item.value"
+          [class.text-on-surface]="period() !== item.value"
+        >
+          {{ item.label }}
+        </button>
+      }
+      <span class="ml-auto font-label-sm text-label-sm text-secondary"
+        >{{ readings().length }} mesure(s) · {{ periodLabel() }}</span
+      >
+    </section>
+
+    @if (period() === 'custom') {
+      <section
+        class="mb-space-lg grid grid-cols-1 items-end gap-space-md rounded-xl bg-surface-container-lowest p-space-lg shadow-sm sm:grid-cols-3"
+        aria-label="Période personnalisée"
+      >
+        <label class="flex flex-col gap-1">
+          <span class="font-label-sm text-label-sm font-semibold text-secondary">Du</span>
+          <input
+            type="datetime-local"
+            data-testid="custom-from"
+            [value]="customFrom()"
+            (input)="setCustomFrom($event)"
+            class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface"
+          />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="font-label-sm text-label-sm font-semibold text-secondary">Au</span>
+          <input
+            type="datetime-local"
+            data-testid="custom-to"
+            [value]="customTo()"
+            (input)="setCustomTo($event)"
+            class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface"
+          />
+        </label>
+        <button
+          type="button"
+          data-testid="apply-custom-range"
+          (click)="applyCustomRange()"
+          [disabled]="customRangeError() !== null"
+          class="rounded-lg bg-primary px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-primary disabled:opacity-50"
+        >
+          Appliquer
+        </button>
+        @if (customRangeError()) {
+          <p
+            role="alert"
+            data-testid="custom-range-error"
+            class="font-label-sm text-label-sm text-error sm:col-span-3"
+          >
+            {{ customRangeError() }}
+          </p>
+        }
+      </section>
+    }
+
+    @if (error()) {
+      <p
+        role="alert"
+        data-testid="history-error"
+        class="mb-space-md rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container"
+      >
+        {{ error() }}
+      </p>
+    }
+    @if (anomalyError()) {
+      <p
+        role="status"
+        data-testid="anomaly-warning"
+        class="mb-space-md rounded-xl bg-amber-100 px-space-md py-space-sm font-label-md text-label-md text-amber-900"
+      >
+        Les repères d’anomalie sont indisponibles : {{ anomalyError() }}
+      </p>
+    }
+
+    @if (loading()) {
+      <p
+        data-testid="history-loading"
+        class="rounded-xl bg-surface-container-lowest px-space-lg py-space-lg font-body-md text-body-md text-secondary"
+      >
+        Chargement de l’historique…
+      </p>
+    } @else if (error()) {
+      <button
+        type="button"
+        (click)="reload()"
+        class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface hover:bg-surface-container-highest"
+      >
+        Réessayer
+      </button>
+    } @else if (readings().length === 0) {
+      <p
+        data-testid="empty-history"
+        class="rounded-xl bg-surface-container-lowest px-space-lg py-space-lg font-body-md text-body-md text-secondary"
+      >
+        Aucune mesure pour ce capteur sur les {{ periodLabel() }}.
+      </p>
+    } @else {
+      <section
+        class="mb-space-lg rounded-xl bg-surface-container-lowest p-space-lg shadow-sm"
+        aria-label="Visualisation de l’historique"
+      >
+        @if (sensor()?.type === 'PUMP_STATE') {
+          <h2 class="mb-space-md font-headline-md text-headline-md text-on-surface">
+            Historique des états de la pompe
+          </h2>
+          <ol class="flex flex-col gap-space-sm">
+            @for (reading of latestReadings(); track $index) {
+              <li
+                class="flex flex-wrap items-center justify-between gap-space-sm border-b border-outline-variant/30 pb-space-sm"
+              >
+                <time class="font-body-sm text-body-sm text-secondary">{{
+                  measuredAt(reading.measuredAt)
+                }}</time>
+                <span
+                  class="rounded-full px-space-sm py-space-2xs font-label-sm text-label-sm font-bold {{
+                    pumpStateClass(reading.pumpState)
+                  }}"
+                >
+                  {{ reading.pumpState ? pumpStateLabel(reading.pumpState) : 'État inconnu' }}
+                </span>
+              </li>
+            }
+          </ol>
+        } @else if (chart().dots.length > 0) {
+          <h2 class="mb-space-md font-headline-md text-headline-md text-on-surface">
+            Évolution des mesures
+          </h2>
+          <svg
+            data-testid="history-chart"
+            [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight"
+            role="img"
+            [attr.aria-label]="chartAriaLabel()"
+            class="h-56 w-full"
+          >
+            <line
+              x1="32"
+              [attr.x2]="chartWidth - 16"
+              y1="160"
+              y2="160"
+              class="stroke-outline-variant"
+              stroke-width="1"
+            />
+            @for (threshold of thresholdLines(); track threshold.label) {
+              <line
+                data-testid="threshold-line"
+                [attr.x1]="32"
+                [attr.x2]="chartWidth - 16"
+                [attr.y1]="threshold.y"
+                [attr.y2]="threshold.y"
+                [attr.class]="thresholdStrokeClass(threshold.kind)"
+                stroke-width="1.5"
+                stroke-dasharray="6 4"
+              >
+                <title>{{ threshold.label }} : {{ chartValue(threshold.value) }}</title>
+              </line>
+            }
+            @if (chart().dots.length > 1) {
+              <polyline
+                [attr.points]="chart().points"
+                fill="none"
+                class="stroke-primary"
+                stroke-width="3"
+                stroke-linejoin="round"
+              />
+            }
+            @for (marker of anomalyMarkers(); track marker.id) {
+              <g [attr.data-testid]="'anomaly-marker-' + marker.id">
+                <line
+                  [attr.x1]="marker.x"
+                  [attr.x2]="marker.x"
+                  y1="12"
+                  y2="160"
+                  [attr.class]="anomalyStrokeClass(marker.severity)"
+                  stroke-width="1.5"
+                  stroke-dasharray="3 3"
+                />
+                <circle
+                  [attr.cx]="marker.x"
+                  cy="12"
+                  r="5"
+                  [attr.class]="anomalyFillClass(marker.severity)"
+                >
+                  <title>
+                    {{ marker.label }} · {{ marker.severity }} · {{ measuredAt(marker.date) }}
+                  </title>
+                </circle>
+              </g>
+            }
+            @for (dot of chart().dots; track $index) {
+              <circle [attr.cx]="dot.x" [attr.cy]="dot.y" r="3" class="fill-primary">
+                <title>{{ measuredAt(dot.measuredAt) }} : {{ chartValue(dot.value) }}</title>
+              </circle>
+            }
+          </svg>
+          <div
+            class="flex flex-wrap justify-between gap-space-sm font-label-sm text-label-sm text-secondary"
+          >
+            <span>{{ chartValue(chart().min) }} – {{ chartValue(chart().max) }}</span>
+            <span>{{ measuredAt(chart().dots[0].measuredAt) }}</span>
+            <span>{{ measuredAt(chart().dots[chart().dots.length - 1].measuredAt) }}</span>
+          </div>
+          @if (thresholdLines().length > 0) {
+            <div
+              data-testid="threshold-legend"
+              class="mt-space-md flex flex-wrap gap-space-lg font-label-sm text-label-sm"
+            >
+              <span class="font-semibold text-secondary">Seuils indicatifs :</span>
+              @for (threshold of thresholdLines(); track threshold.label) {
+                <span [class]="thresholdTextClass(threshold.kind)">
+                  {{ threshold.label }} : {{ chartValue(threshold.value) }}
+                </span>
+              }
+            </div>
+          }
+          @if (anomalyMarkers().length > 0) {
+            <p
+              data-testid="anomaly-marker-count"
+              class="mt-space-sm font-label-sm text-label-sm text-secondary"
+            >
+              {{ anomalyMarkers().length }} repère(s) d’anomalie sur le graphique
+            </p>
+          }
+        } @else {
+          <p class="font-body-md text-body-md text-secondary">
+            Aucune mesure numérique à afficher pour cette période.
+          </p>
+        }
+      </section>
+
+      <section
+        class="overflow-x-auto rounded-xl bg-surface-container-lowest shadow-sm"
+        aria-label="Mesures récentes"
+      >
+        <h2 class="px-space-lg pt-space-lg font-headline-md text-headline-md text-on-surface">
+          Mesures récentes
+        </h2>
+        <table class="w-full text-left">
+          <thead class="bg-surface-container-low">
+            <tr class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">
+              <th scope="col" class="px-space-lg py-space-sm font-semibold">Date</th>
+              <th scope="col" class="px-space-lg py-space-sm font-semibold">Valeur / état</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (reading of tableRows(); track $index) {
+              <tr class="border-t border-outline-variant/30" data-testid="history-row">
+                <td
+                  class="whitespace-nowrap px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant"
+                >
+                  {{ measuredAt(reading.measuredAt) }}
+                </td>
+                <td
+                  class="px-space-lg py-space-sm font-mono-telemetry text-mono-telemetry text-on-surface"
+                >
+                  {{ valueLabel(reading) }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <app-pagination
+          [page]="tablePage()"
+          [size]="tableSize()"
+          [total]="readings().length"
+          [sizes]="[10, 20, 50]"
+          (pageChange)="setTablePage($event)"
+          (sizeChange)="setTableSize($event)"
+        />
+      </section>
+    }
+  </div>
+</app-shell>

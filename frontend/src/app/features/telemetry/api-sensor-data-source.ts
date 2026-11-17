@@ -1,8 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, forkJoin, map, of, switchMap } from 'rxjs';
+import { EMPTY, Observable, expand, forkJoin, map, of, reduce, switchMap } from 'rxjs';
 import { AppConfig } from '../../core/app-config';
-import { SensorRow, SensorType } from './sensor.model';
+import { SensorReading, SensorRow, SensorType } from './sensor.model';
 
 interface ApiSensor {
   id: number;
@@ -32,6 +32,8 @@ interface ApiReading {
 
 interface ApiPage<T> {
   content: T[];
+  page: number;
+  totalPages: number;
 }
 
 interface AssetLists {
@@ -70,6 +72,28 @@ export class ApiSensorDataSource {
           ),
         );
       }),
+    );
+  }
+
+  getHistory(config: AppConfig, sensorId: number, from: Date, to: Date): Observable<SensorReading[]> {
+    const url = `${config.telemetryBaseUrl}/readings`;
+    const params = new HttpParams()
+      .set('sensor', sensorId)
+      .set('from', from.toISOString())
+      .set('to', to.toISOString())
+      .set('page', 0)
+      .set('size', 1000);
+
+    return this.http.get<ApiPage<ApiReading>>(url, { params }).pipe(
+      expand((page) =>
+        page.page + 1 < page.totalPages
+          ? this.http.get<ApiPage<ApiReading>>(url, { params: params.set('page', page.page + 1) })
+          : EMPTY,
+      ),
+      reduce((readings, page) => readings.concat(page.content), [] as ApiReading[]),
+      map((readings) =>
+        readings.map(({ value, unit, pumpState, measuredAt }) => ({ value, unit, pumpState, measuredAt })),
+      ),
     );
   }
 

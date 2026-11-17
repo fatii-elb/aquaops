@@ -20,4 +20,14 @@ export class ConfiguredSensorDataSource extends SensorDataSource {
       ),
     );
   }
+
+  getHistory(sensorId: number, fromDate: Date, toDate: Date) {
+    return from(this.config).pipe(
+      switchMap((config) =>
+        config.sensorDataMode === 'api'
+          ? this.api.getHistory(config, sensorId, fromDate, toDate)
+          : this.mock.getHistory(sensorId, fromDate, toDate),
+      ),
+    );
+  }
 }
