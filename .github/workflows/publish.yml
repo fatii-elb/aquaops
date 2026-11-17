@@ -68,13 +68,14 @@ env:
   GHCR_PUBLISH: 'on'
   # Automatic deployment to the test VM (SCRUM-55 / NFR-08, E5):
   #   'off'  no deployment job runs (emergency stop: set back to 'off')
+  #          (current setting: Sprint 4 VM frozen during Sprint 5-6).
   #   'on'   after every successful pipeline on main, deploy this commit through
-  #          the wrapper on the runner labelled aquaops-test (current setting).
+  #          the wrapper on the runner labelled aquaops-test.
   #          Refused unless GHCR_PUBLISH is 'on' (which itself requires
   #          TRIVY_EXIT_CODE '1'): only blocked-and-published images are deployed.
   #          The wrapper reads these three lines in the commit it deploys.
   # Needs: the runner and the VM prepared (deploy/README.md § 7).
-  DEPLOY_TEST: 'on'
+  DEPLOY_TEST: 'off'
 
 jobs:
 

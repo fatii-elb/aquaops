@@ -195,3 +195,81 @@ variable "infrastructure_storage" {
     kafka    = "2Gi"
   }
 }
+
+# -----------------------------------------------------------------------------
+# The 7 AquaOps services (services.tf, assets.tf)
+# -----------------------------------------------------------------------------
+
+variable "services_enabled" {
+  description = "Deploy the 7 services. Needs infrastructure_enabled."
+  type        = bool
+  default     = false
+}
+
+variable "services_image_tag" {
+  description = "Commit SHA the 7 images were built from (one tag for all, like IMAGE_TAG in the pipeline)."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.services_image_tag == null || can(regex("^[0-9a-f]{7,40}$", var.services_image_tag))
+    error_message = "services_image_tag: a commit SHA (7 to 40 hexadecimal characters), never \"latest\"."
+  }
+}
+
+variable "services_image_registry" {
+  description = "localhost/aquaops = images imported into k3s (pull policy Never, no token); ghcr.io/fatii-elb/aquaops once the Images workflow publishes again."
+  type        = string
+  default     = "localhost/aquaops"
+
+  validation {
+    condition     = contains(["localhost/aquaops", "ghcr.io/fatii-elb/aquaops"], var.services_image_registry)
+    error_message = "services_image_registry: localhost/aquaops or ghcr.io/fatii-elb/aquaops."
+  }
+}
+
+variable "gateway_eureka_routes" {
+  description = "Services the gateway reaches through Eureka (lb://). The others keep a fixed address until their owner adds the Eureka client."
+  type        = list(string)
+  default     = ["assets"]
+
+  validation {
+    condition     = alltrue([for s in var.gateway_eureka_routes : contains(["telemetry", "assets", "detection", "incidents", "notifications", "simulator"], s)])
+    error_message = "gateway_eureka_routes: names among telemetry, assets, detection, incidents, notifications, simulator."
+  }
+}
+
+variable "services_image_digests" {
+  description = "sha256 digest of each service image (name => \"sha256:...\"). Required for all 7 when the images are pulled from a registry; ignored for imported images."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([for name, d in var.services_image_digests :
+      contains(["gateway", "telemetry", "assets", "detection", "incidents", "notifications", "simulator"], name)
+    && can(regex("^sha256:[0-9a-f]{64}$", d))])
+    error_message = "services_image_digests: keys among the 7 service names, values \"sha256:\" + 64 hexadecimal characters."
+  }
+}
+
+variable "e2_replicas" {
+  description = "Replica count for E2's services (assets, telemetry). Unset = the value of E2's manifest (2, NFR-05)."
+  type        = map(number)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for k, v in var.e2_replicas : contains(["assets", "telemetry"], k) && v >= 1 && v <= 6])
+    error_message = "e2_replicas: keys assets or telemetry, 1 to 6 replicas."
+  }
+}
+
+variable "services_rollout_timeout" {
+  description = "How long apply waits for each service rollout before failing (the deploy script then rolls back)."
+  type        = string
+  default     = "10m"
+
+  validation {
+    condition     = can(regex("^[0-9]+[sm]$", var.services_rollout_timeout))
+    error_message = "services_rollout_timeout: a duration such as \"300s\" or \"10m\"."
+  }
+}

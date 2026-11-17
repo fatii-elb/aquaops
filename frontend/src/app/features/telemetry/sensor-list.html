@@ -1,0 +1,134 @@
+<app-shell title="Télémétrie & Capteurs" active="telemetry">
+  <div class="mx-auto w-full max-w-7xl px-space-xl pb-space-3xl pt-space-xl">
+    <div class="mb-space-lg flex flex-wrap items-end justify-between gap-space-md">
+      <div>
+        <h1 class="font-headline-lg text-headline-lg font-bold text-on-surface">Télémétrie & Capteurs</h1>
+        <p class="mt-space-xs font-body-md text-body-md text-secondary">
+          État des capteurs, dernières mesures et actifs associés.
+        </p>
+      </div>
+      <span class="font-label-sm text-label-sm text-secondary" data-testid="refresh-rate">Actualisation automatique toutes les 5 s</span>
+    </div>
+
+    @if (selectedSensorId(); as sensorId) {
+      <div class="mb-space-md flex flex-wrap items-center justify-between gap-space-sm rounded-xl bg-primary-container/40 px-space-lg py-space-md">
+        <p class="font-body-md text-body-md text-on-surface">
+          Capteur #{{ sensorId }} sélectionné. L’historique détaillé sera affiché dans FE-8.
+        </p>
+        <a routerLink="/telemetry" class="rounded-lg bg-surface-container-lowest px-space-md py-space-xs font-label-md text-label-md font-semibold text-primary">
+          Retour à la liste
+        </a>
+      </div>
+    }
+
+    <div class="mb-space-lg grid grid-cols-1 gap-space-md sm:grid-cols-3">
+      <article class="rounded-xl bg-surface-container-lowest p-space-lg shadow-sm">
+        <p class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Capteurs suivis</p>
+        <p class="mt-space-xs font-headline-lg text-headline-lg font-bold text-on-surface" data-testid="sensor-count">{{ sensors().length }}</p>
+      </article>
+      <article class="rounded-xl bg-surface-container-lowest p-space-lg shadow-sm">
+        <p class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Actifs</p>
+        <p class="mt-space-xs font-headline-lg text-headline-lg font-bold text-tertiary" data-testid="active-count">{{ activeCount() }}</p>
+      </article>
+      <article class="rounded-xl bg-surface-container-lowest p-space-lg shadow-sm">
+        <p class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">Silencieux</p>
+        <p class="mt-space-xs font-headline-lg text-headline-lg font-bold text-amber-700" data-testid="silent-count">{{ silentCount() }}</p>
+      </article>
+    </div>
+
+    <form class="mb-space-lg grid grid-cols-1 items-end gap-space-md rounded-xl bg-surface-container-lowest p-space-lg shadow-sm sm:grid-cols-2 lg:grid-cols-5" aria-label="Filtres des capteurs">
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Zone</span>
+        <select data-testid="filter-zone" [value]="zoneFilter()" (change)="setZone($event)"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface">
+          <option value="">Toutes les zones</option>
+          @for (zone of zones(); track zone.id) {
+            <option [value]="zone.id">{{ zone.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Type</span>
+        <select data-testid="filter-type" [value]="typeFilter()" (change)="setType($event)"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface">
+          <option value="">Tous les types</option>
+          <option value="PRESSURE">Pression</option>
+          <option value="FLOW">Débit</option>
+          <option value="LEVEL">Niveau</option>
+          <option value="PUMP_STATE">État pompe</option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">État</span>
+        <select data-testid="filter-state" [value]="stateFilter()" (change)="setState($event)"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface">
+          <option value="">Tous les états</option>
+          <option value="active">Actif</option>
+          <option value="silent">Silencieux</option>
+        </select>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold uppercase tracking-wider text-secondary">Identifiant</span>
+        <input type="search" data-testid="filter-id" placeholder="Rechercher un capteur"
+          [value]="search()" (input)="setSearch($event)"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface placeholder:text-secondary" />
+      </label>
+      <button type="button" data-testid="reset-filters" (click)="resetFilters()"
+        class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface hover:bg-surface-container-highest">
+        Réinitialiser
+      </button>
+    </form>
+
+    @if (error()) {
+      <p role="alert" data-testid="sensor-error" class="mb-space-md rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">
+        {{ error() }}
+      </p>
+    }
+
+    <section aria-label="Liste des capteurs" class="overflow-x-auto rounded-xl bg-surface-container-lowest shadow-sm">
+      <table class="w-full text-left">
+        <thead class="bg-surface-container-low">
+          <tr class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Capteur</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Type</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Zone</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Actif rattaché</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Dernière valeur</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">Dernière mesure</th>
+            <th scope="col" class="px-space-lg py-space-sm font-semibold">État</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (sensor of filteredSensors(); track sensor.id) {
+            <tr class="border-t border-outline-variant/30 align-top hover:bg-surface-container-low/50" data-testid="sensor-row">
+              <td class="whitespace-nowrap px-space-lg py-space-sm">
+                <a [routerLink]="['/telemetry', sensor.id]" class="font-label-md text-label-md font-semibold text-primary hover:underline">
+                  #{{ sensor.id }} · {{ sensor.name }}
+                </a>
+              </td>
+              <td class="px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant">{{ typeLabel(sensor.type) }}</td>
+              <td class="px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant">{{ sensor.zoneName }}</td>
+              <td class="px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant">{{ sensor.assetName }}</td>
+              <td class="whitespace-nowrap px-space-lg py-space-sm font-mono-telemetry text-mono-telemetry text-on-surface">{{ latestValue(sensor) }}</td>
+              <td class="whitespace-nowrap px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant">{{ measuredAt(sensor.measuredAt) }}</td>
+              <td class="px-space-lg py-space-sm">
+                <span class="rounded-full px-space-sm py-space-2xs font-label-sm text-label-sm font-bold {{ stateClass(sensor.state) }}"
+                  [attr.data-state]="sensor.state">
+                  {{ stateLabel(sensor.state) }}
+                </span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+
+      @if (loading() && !loaded()) {
+        <p class="px-space-lg py-space-lg font-body-md text-body-md text-secondary">Chargement des capteurs…</p>
+      } @else if (loaded() && filteredSensors().length === 0 && !error()) {
+        <p data-testid="empty-sensors" class="px-space-lg py-space-lg font-body-md text-body-md text-secondary">
+          Aucun capteur ne correspond à ces filtres.
+        </p>
+      }
+    </section>
+  </div>
+</app-shell>
