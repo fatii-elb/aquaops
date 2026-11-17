@@ -62,3 +62,29 @@ describe('AppShell : liens des pages d\'attente (FE-6)', () => {
     expect(el.querySelector('nav a[href="/observability"]')).not.toBeNull();
   });
 });
+describe('AppShell : liens réservés selon le rôle (FE-4)', () => {
+  function render(hasAnyRole: () => boolean): HTMLElement {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [AppShell],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: { username: 'u', hasAnyRole, logout() {} } },
+        { provide: EVENT_SOURCE_FACTORY, useValue: () => ({ onopen: null, onerror: null, onmessage: null, close() {} }) },
+      ],
+    });
+    const fixture = TestBed.createComponent(AppShell);
+    fixture.detectChanges();
+    return fixture.nativeElement;
+  }
+
+  it('Réseau & Actifs, Administration et Journal d\'audit sont réservés aux rôles autorisés', () => {
+    const restricted = ['/assets', '/administration', '/audit'];
+    const sansRole = render(() => false);
+    for (const href of restricted) expect(sansRole.querySelector(`nav a[href="${href}"]`), `sans rôle ${href}`).toBeNull();
+    const avecRole = render(() => true);
+    for (const href of restricted) expect(avecRole.querySelector(`nav a[href="${href}"]`), `avec rôle ${href}`).not.toBeNull();
+  });
+});
