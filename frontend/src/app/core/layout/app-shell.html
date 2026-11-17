@@ -1,72 +1,81 @@
 <div class="min-h-screen bg-background font-body-md text-body-md text-on-surface antialiased">
   <app-notification-toasts />
 
-  <!-- ===== Menu à gauche ===== -->
+  <!-- ===== Barre latérale (même rendu que le tableau de bord) ===== -->
   <aside class="fixed left-0 top-0 z-50 flex h-full w-72 flex-col justify-between overflow-y-auto bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
     <div class="flex flex-col">
-      <div class="px-space-xl pt-space-xl pb-space-md">
-        <div class="flex items-center gap-space-sm">
-          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-on-primary shadow-sm">
+      <div class="p-space-lg bg-surface-container-low/40">
+        <div class="flex items-center gap-space-sm mb-space-2xs">
+          <div class="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center shadow-sm">
             <span class="material-symbols-outlined text-[22px]">water_drop</span>
           </div>
-          <div class="flex items-center gap-space-xs">
-            <span class="font-headline-md text-headline-md tracking-tight text-on-surface">AquaOps</span>
-            <span class="rounded-full bg-secondary-container px-space-xs py-space-2xs font-label-sm text-label-sm text-on-secondary-container">v1.1.0-demo</span>
+          <div class="flex flex-col flex-1">
+            <div class="flex items-center justify-between">
+              <span class="font-headline-md text-headline-md tracking-tight text-on-surface font-bold">AquaOps</span>
+              <span class="font-label-sm text-label-sm px-space-xs py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-semibold">v1.1.0-demo</span>
+            </div>
+            <span class="font-label-sm text-label-sm text-secondary font-medium tracking-wide">Surveiller • Détecter • Protéger</span>
           </div>
         </div>
-        <p class="mt-space-2xs font-label-sm text-label-sm uppercase tracking-wide text-secondary">Surveiller • Détecter • Protéger</p>
-        <div class="mt-space-md flex items-center gap-space-xs rounded-lg bg-surface-container-low px-space-md py-space-xs">
-          <span class="h-2 w-2 animate-pulse rounded-full bg-tertiary"></span>
-          <span class="font-label-sm text-label-sm font-medium text-on-surface-variant">Données simulées (Rabat/Secteur)</span>
+        <div class="mt-space-sm inline-flex items-center gap-space-2xs px-space-sm py-1 rounded-full bg-secondary-container/60 text-on-secondary-fixed">
+          <span class="material-symbols-outlined text-[13px] text-primary">explore</span>
+          <span class="font-label-sm text-label-sm">Données simulées (Rabat/Secteur)</span>
         </div>
       </div>
 
-      <nav class="mt-space-sm flex flex-col gap-space-2xs px-space-md" aria-label="Navigation principale">
+      <nav class="px-space-md py-space-sm flex flex-col gap-1" aria-label="Navigation principale">
         @for (item of nav; track item.key) {
           @if (item.link) {
             <a
               [routerLink]="item.link"
               [attr.aria-current]="active() === item.key ? 'page' : null"
-              class="flex items-center gap-space-md rounded-lg px-space-md py-space-sm transition-all {{ active() === item.key ? 'bg-primary font-semibold text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface' }}"
+              class="flex items-center justify-between px-space-md py-space-sm rounded-xl transition-colors {{ active() === item.key ? 'bg-primary-container text-on-primary-container font-semibold' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface' }}"
             >
-              <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
-              <span class="font-label-md text-label-md">{{ item.label }}</span>
+              <div class="flex items-center gap-space-md">
+                <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
+                <span class="font-body-md text-body-md">{{ item.label }}</span>
+              </div>
               @if (item.key === 'alerts' && alertsCount()) {
-                <span class="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-error px-1.5 font-label-sm text-[11px] font-bold text-on-error" data-testid="alerts-count"
+                <span class="px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-secondary-container text-on-secondary-container font-bold" data-testid="alerts-count"
                   [attr.aria-label]="alertsCount() + ' anomalies ouvertes'">{{ alertsCount() }}</span>
               }
             </a>
           } @else {
-            <div class="flex cursor-default items-center gap-space-md rounded-lg px-space-md py-space-sm text-on-surface-variant/70">
-              <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
-              <span class="font-label-md text-label-md">{{ item.label }}</span>
+            <div class="flex cursor-default items-center justify-between px-space-md py-space-sm rounded-xl text-on-surface-variant">
+              <div class="flex items-center gap-space-md">
+                <span class="material-symbols-outlined text-[20px]">{{ item.icon }}</span>
+                <span class="font-body-md text-body-md">{{ item.label }}</span>
+              </div>
             </div>
           }
         }
       </nav>
     </div>
 
-    <div class="p-space-md">
-      <div class="mb-space-sm flex items-center justify-between rounded-lg bg-surface-container-low px-space-md py-space-xs">
+    <div class="p-space-md m-space-md rounded-xl bg-surface-container-low/60 flex flex-col gap-space-sm">
+      <div class="flex items-center justify-between">
         <div class="flex items-center gap-space-xs">
-          <span class="material-symbols-outlined text-[16px] text-tertiary">lock</span>
-          <span class="font-label-sm text-label-sm text-on-surface-variant">VPN Tailscale</span>
+          <span class="w-2 h-2 rounded-full bg-tertiary-container animate-pulse"></span>
+          <span class="font-label-sm text-label-sm text-secondary">VPN Tailscale actif</span>
         </div>
-        <span class="font-label-sm text-label-sm font-semibold text-tertiary">Actif</span>
+        <span class="material-symbols-outlined text-secondary text-[16px]">lock</span>
       </div>
-      <div class="flex items-center justify-between rounded-xl bg-surface-container-low p-space-sm">
+      <div class="flex items-center justify-between pt-space-xs">
         <div class="flex items-center gap-space-sm overflow-hidden">
-          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary">
-            <span class="material-symbols-outlined text-[18px] text-on-primary">person</span>
+          <div class="relative">
+            <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+              <span class="material-symbols-outlined text-on-primary text-[18px]">person</span>
+            </div>
+            <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-tertiary-fixed ring-2 ring-surface-container-lowest"></span>
           </div>
-          <div class="truncate">
-            <p class="truncate font-label-md text-label-md font-semibold text-on-surface">{{ userName }}</p>
-            <p class="truncate font-label-sm text-label-sm text-secondary">Superviseur réseau</p>
+          <div class="flex flex-col truncate">
+            <span class="truncate font-label-md text-label-md font-semibold text-on-surface leading-tight">{{ userName }}</span>
+            <span class="truncate font-label-sm text-label-sm text-secondary leading-tight">Superviseur réseau</span>
           </div>
         </div>
         <button type="button" (click)="logout()" title="Déconnexion" aria-label="Déconnexion"
-          class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-error">
-          <span class="material-symbols-outlined text-[20px]">logout</span>
+          class="p-1.5 rounded-lg text-secondary hover:text-error hover:bg-error-container/40 transition-colors">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
         </button>
       </div>
     </div>

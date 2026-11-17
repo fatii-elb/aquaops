@@ -32,6 +32,7 @@ export class AppShell {
   protected readonly userName = this.auth.username || 'Utilisateur';
   protected readonly bellOpen = signal(false);
 
+  /** Même menu, même ordre et mêmes droits que le tableau de bord. */
   private readonly allNav: NavItem[] = [
     { key: 'dashboard', icon: 'grid_view', label: 'Tableau de bord', link: '/dashboard' },
     { key: 'assets', icon: 'hub', label: 'Réseau & Actifs', link: '/assets', roles: ['administrateur'] },
@@ -39,9 +40,11 @@ export class AppShell {
     { key: 'alerts', icon: 'warning', label: 'Alertes & Anomalies', link: '/alerts' },
     { key: 'incidents', icon: 'emergency', label: 'Incidents', link: '/incidents' },
     { key: 'interventions', icon: 'engineering', label: 'Interventions' },
-    { key: 'reports', icon: 'analytics', label: 'Rapports & Analyses', link: '/reports' },
+    { key: 'reports', icon: 'analytics', label: 'Rapports & Analyses', link: '/reports', roles: ['superviseur', 'administrateur'] },
+    { key: 'notifications', icon: 'notifications', label: 'Notifications' },
     { key: 'observability', icon: 'monitor_heart', label: 'Observabilité', link: '/observability' },
-    { key: 'admin', icon: 'admin_panel_settings', label: 'Administration', link: '/administration' },
+    { key: 'admin', icon: 'admin_panel_settings', label: 'Administration', link: '/administration', roles: ['administrateur'] },
+    { key: 'audit', icon: 'history', label: "Journal d'audit", link: '/audit', roles: ['superviseur', 'administrateur'] },
   ];
 
   protected readonly nav: NavItem[] = this.allNav.filter((item) => !item.roles || this.auth.hasAnyRole(item.roles));
