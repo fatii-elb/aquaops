@@ -32,3 +32,6 @@ ghcr_pull_secret = false
 # PostgreSQL, Kafka, Keycloak and Eureka stay in Docker Compose on the VM for
 # now: not deployed in k3s for "test" (decision of 2026-11-15).
 infrastructure_enabled = false
+
+# The services stay in Docker Compose on the VM (Sprint 4 deployment).
+services_enabled = false
