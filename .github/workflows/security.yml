@@ -1,0 +1,245 @@
+# =============================================================================
+# AquaOps security scans: SCA (dependencies) and IaC (Terraform, Kubernetes,
+# Dockerfiles). Sprint 5, E5 · NFR-16 / RC-08.
+#
+# Jobs:
+#   iac            Trivy config: CRITICAL blocks; HIGH and below reported.
+#                  Checkov: understands the Terraform kubernetes_* resources
+#                  (Trivy has no check for them); fails only on the critical
+#                  checks listed in CHECKOV_HARD_FAIL, reports everything else.
+#   sca-trivy      the 8 Spring Boot jars (exactly what the images ship),
+#                  Trivy Java DB (GitHub advisories): fixable CRITICAL blocks.
+#   sca-owasp      OWASP Dependency-Check (NVD) on every service: CVSS >= 9
+#                  blocks. Needs the repository secret NVD_API_KEY: never on
+#                  pull requests (secrets are not given to fork PRs), and an
+#                  absent key or a failed NVD update FAILS the job: an
+#                  incomplete scan is never a pass.
+#
+# Safety: GitHub-hosted runners only, read-only token, no deployment, no
+# push. Tools pinned by version AND digest; actions by commit SHA.
+# Accepted exceptions: deploy/trivy/.trivyignore (vulnerabilities),
+# deploy/sca/dependency-check-suppressions.xml (Dependency-Check false
+# positives), inline "#checkov:skip" with a reason (IaC). Each one has a reason.
+# =============================================================================
+
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * 1'       # weekly: new CVEs appear without any commit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+  CHECKOV_IMAGE: bridgecrew/checkov:3.4.0@sha256:ece5efac4443084ca273072909985dce988a81e8cc94faa305aeda0df27c68f9
+  DEPENDENCY_CHECK: org.owasp:dependency-check-maven:13.0.0
+  # Checkov checks that block (critical in this project): privileged
+  # container (16), host PID/IPC/network (17/18/19), privilege escalation
+  # (20), added capabilities (25), hostPort (26), Docker socket (27),
+  # SYS_ADMIN (39). Secrets in files: Gitleaks (gitleaks.yml).
+  CHECKOV_HARD_FAIL: CKV_K8S_16,CKV_K8S_17,CKV_K8S_18,CKV_K8S_19,CKV_K8S_20,CKV_K8S_25,CKV_K8S_26,CKV_K8S_27,CKV_K8S_39
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  iac:
+    name: IaC (Trivy config, Checkov)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Terraform evaluated with the values of each environment (rc11 enables
+      # everything), E2's manifests in deploy/k8s, the Dockerfiles.
+      - name: Trivy config, full report
+        run: |
+          mkdir -p reports
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/reports:/reports" -w /src "$TRIVY_IMAGE" \
+            config --quiet --skip-dirs '**/.terraform' \
+            --tf-vars deploy/terraform/environment/envs/rc11.tfvars \
+            --severity LOW,MEDIUM,HIGH,CRITICAL --format table --output /reports/iac-trivy.txt deploy
+          cat reports/iac-trivy.txt
+
+      - name: Trivy config, CRITICAL blocks
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src "$TRIVY_IMAGE" \
+            config --quiet --skip-dirs '**/.terraform' \
+            --tf-vars deploy/terraform/environment/envs/rc11.tfvars \
+            --severity CRITICAL --exit-code 1 deploy
+
+      - name: Checkov (Terraform and Kubernetes)
+        if: always()
+        run: |
+          mkdir -p reports
+          docker run --rm -v "$PWD:/src" -w /src "$CHECKOV_IMAGE" \
+            -d deploy/terraform -d deploy/k8s --framework terraform kubernetes \
+            --skip-path .terraform --var-file deploy/terraform/environment/envs/rc11.tfvars \
+            --soft-fail --hard-fail-on "$CHECKOV_HARD_FAIL" --compact \
+            -o cli -o sarif --output-file-path console,reports/iac-checkov.sarif
+
+      - name: Upload IaC reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: iac-reports
+          path: reports/
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  sca-trivy:
+    name: SCA (Trivy, service jars)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78  # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/*/pom.xml
+
+      # The same jar the image ships (deploy/docker/spring-service.Dockerfile).
+      - name: Package the 8 jars
+        run: |
+          set -euo pipefail
+          mkdir -p sca/jars
+          for s in services/*/; do
+            name="$(basename "$s")"
+            (cd "$s" && sh ./mvnw -B -ntp -q package -DskipTests)
+            set -- "$s"target/*.jar
+            [ "$#" -eq 1 ] || { echo "::error::$name: expected one jar, found $*"; exit 1; }
+            cp "$1" "sca/jars/$name.jar"
+          done
+          ls -l sca/jars
+
+      # Trivy reads jars in rootfs mode only. A database download failure
+      # also exits non-zero: the job fails, it never passes on missing data.
+      - name: Trivy, full report (HIGH and CRITICAL)
+        run: |
+          docker run --rm -v "$PWD/sca:/sca" "$TRIVY_IMAGE" rootfs --quiet --scanners vuln \
+            --list-all-pkgs --severity HIGH,CRITICAL --format json --output /sca/sca-trivy.json /sca/jars
+          docker run --rm -v "$PWD/sca:/sca" "$TRIVY_IMAGE" convert --format table /sca/sca-trivy.json \
+            | tee sca/sca-trivy.txt
+
+      # A scan that read no dependency is a failed scan, not a clean one.
+      - name: Completeness check
+        run: |
+          set -euo pipefail
+          jars="$(find sca/jars -name '*.jar' | wc -l)"
+          pkgs="$(jq '[.Results[]? | select(.Class == "lang-pkgs") | .Packages[]?] | length' sca/sca-trivy.json)"
+          [ "$jars" -eq 8 ] || { echo "::error::expected 8 jars, found $jars: incomplete"; exit 1; }
+          [ "$pkgs" -ge 100 ] || { echo "::error::only $pkgs Java packages read from 8 jars: incomplete scan"; exit 1; }
+          echo "scan complete: $jars jars, $pkgs Java packages"
+
+      - name: Trivy, fixable CRITICAL blocks
+        run: |
+          docker run --rm -v "$PWD/sca:/sca" -v "$PWD/deploy/trivy:/cfg:ro" "$TRIVY_IMAGE" rootfs --quiet \
+            --scanners vuln --ignorefile /cfg/.trivyignore --severity CRITICAL --ignore-unfixed \
+            --exit-code 1 /sca/jars
+
+      - name: Upload SCA report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: sca-trivy
+          path: |
+            sca/sca-trivy.json
+            sca/sca-trivy.txt
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  sca-owasp:
+    name: SCA (OWASP Dependency-Check)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Require the NVD API key
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          [ -n "$NVD_API_KEY" ] || {
+            echo "::error::NVD_API_KEY is not set: Dependency-Check cannot load the NVD. The scan is INCOMPLETE, not passed."
+            exit 1
+          }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78  # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: services/*/pom.xml
+
+      # The NVD copy (about 1 GB) is kept between runs: an incremental update
+      # takes minutes instead of the full download.
+      - name: Week number
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.dependency-check-data
+          key: dependency-check-${{ steps.week.outputs.week }}
+          restore-keys: dependency-check-
+
+      # One update for all services. failOnError (default true): an NVD
+      # outage or a rate limit fails here, with the reason in the log.
+      - name: Update the NVD data
+        working-directory: services/gateway
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          sh ./mvnw -B -ntp "$DEPENDENCY_CHECK:update-only" \
+            -DnvdApiKeyEnvironmentVariable=NVD_API_KEY -DnvdMaxRetryCount=10 \
+            -DdataDirectory="$HOME/.dependency-check-data"
+
+      - name: Dependency-Check, CVSS >= 9 blocks
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          set -uo pipefail
+          mkdir -p dc-reports; failed=""
+          for s in services/*/; do
+            name="$(basename "$s")"
+            if ! (cd "$s" && sh ./mvnw -B -ntp "$DEPENDENCY_CHECK:check" \
+                  -DautoUpdate=false -DdataDirectory="$HOME/.dependency-check-data" \
+                  -DnvdApiKeyEnvironmentVariable=NVD_API_KEY \
+                  -DfailBuildOnCVSS=9 -DfailOnError=true -DskipTestScope=true \
+                  -DossIndexAnalyzerEnabled=false -DnodeAnalyzerEnabled=false \
+                  -DnodeAuditAnalyzerEnabled=false -DretireJsAnalyzerEnabled=false \
+                  -DsuppressionFile="$GITHUB_WORKSPACE/deploy/sca/dependency-check-suppressions.xml" \
+                  -Dformats=HTML,JSON -DoutputDirectory="$GITHUB_WORKSPACE/dc-reports/$name"); then
+              failed="$failed $name"
+            fi
+          done
+          [ -z "$failed" ] || { echo "::error::Dependency-Check failed (CVSS >= 9 or scan error) for:$failed"; exit 1; }
+
+      - name: Upload Dependency-Check reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: sca-dependency-check
+          path: dc-reports/
+          if-no-files-found: ignore
+          retention-days: 30

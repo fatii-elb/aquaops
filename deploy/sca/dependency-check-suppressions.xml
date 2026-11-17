@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OWASP Dependency-Check: accepted FALSE POSITIVES only (Sprint 5, E5).
+  Read by .github/workflows/security.yml (job sca-owasp).
+
+  RULE: one <suppress> per false positive (wrong CPE match), never to hide a
+  real vulnerability. Each entry has <notes> with: the reason, the date, the
+  person who reviewed it, and an <until> date so it is reviewed again.
+  A real vulnerability that cannot be fixed yet goes to deploy/trivy/.trivyignore
+  with the same rule, and to the "Risques acceptes" table of
+  docs/security-scans.md.
+
+  Example (do not uncomment without a reason):
+  <suppress until="2027-01-31Z">
+    <notes>CPE cpe:/a:example:example matched the wrong project; reviewed 2026-12-01 by E5.</notes>
+    <packageUrl regex="true">^pkg:maven/org\.example/example@.*$</packageUrl>
+    <cpe>cpe:/a:example:example</cpe>
+  </suppress>
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+</suppressions>
