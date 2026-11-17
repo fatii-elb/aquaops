@@ -15,6 +15,8 @@ import { ApiAuditDataSource } from './features/audit/api-audit-data-source';
 import { AuditDataSource } from './features/audit/audit-data-source';
 import { AUDIT_DATA_SOURCE_CONFIG } from './features/audit/audit-data-source.config';
 import { MockAuditDataSource } from './features/audit/mock-audit-data-source';
+import { ConfiguredSensorDataSource } from './features/telemetry/configured-sensor-data-source';
+import { SensorDataSource } from './features/telemetry/sensor-data-source';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -26,6 +28,7 @@ export const appConfig: ApplicationConfig = {
     { provide: ZoneDataSource, useClass: ZONE_DATA_SOURCE_CONFIG.mode === 'api' ? ApiZoneDataSource : MockZoneDataSource },
     // Source des donnees du journal d'audit : 'api' ou 'mock' (voir audit-data-source.config.ts).
     { provide: AuditDataSource, useClass: AUDIT_DATA_SOURCE_CONFIG.mode === 'api' ? ApiAuditDataSource : MockAuditDataSource },
+    { provide: SensorDataSource, useClass: ConfiguredSensorDataSource },
     // Avant d'afficher la moindre page : contacter Keycloak et lire le retour de connexion.
     provideAppInitializer(() => inject(AuthService).init()),
   ],

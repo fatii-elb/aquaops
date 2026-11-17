@@ -6,6 +6,7 @@ import { Administration } from './features/administration/administration';
 import { Audit } from './features/audit/audit';
 import { authGuard, roleGuard } from './core/auth.guard';
 import { IncidentCenter } from './features/incidents/incident-center/incident-center';
+import { SensorList } from './features/telemetry/sensor-list';
 import { AssetsPage } from './features/assets/assets-page/assets-page';
 import { ComingSoon } from './features/placeholder/coming-soon';
 import { AnomaliesPage } from './features/anomalies/anomalies-page';
@@ -23,10 +24,10 @@ export const routes: Routes = [
   { path: 'incidents/:id', component: IncidentCenter, canActivate: [authGuard] },
   {
     path: 'telemetry',
-    component: ComingSoon,
-    canActivate: [authGuard],
-    data: { title: 'Télémétrie & Capteurs', active: 'telemetry', icon: 'sensors', description: 'Les courbes et les dernières valeurs des capteurs arrivent bientôt.' },
+    component: SensorList,
+    canActivate: [roleGuard('operateur', 'superviseur', 'administrateur')],
   },
+  { path: 'telemetry/:sensorId', component: SensorList, canActivate: [roleGuard('operateur', 'superviseur', 'administrateur')] },
   {
     path: 'observability',
     component: ComingSoon,
