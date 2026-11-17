@@ -1,0 +1,25 @@
+<div class="flex flex-wrap items-center justify-between gap-space-md border-t border-outline-variant/30 px-space-xl py-space-md">
+  <p class="font-label-md text-label-md text-on-surface-variant" data-testid="pagination-info" aria-live="polite">
+    {{ from() }}–{{ to() }} sur {{ total() }}
+  </p>
+  <div class="flex items-center gap-space-sm">
+    <label class="flex items-center gap-space-xs font-label-sm text-label-sm text-secondary">
+      Lignes
+      <select aria-label="Lignes par page" (change)="changeSize($any($event.target).value)"
+        class="rounded-lg bg-surface-container-low px-space-sm py-space-2xs font-label-md text-label-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+        @for (n of sizes(); track n) {
+          <option [value]="n" [selected]="n === size()">{{ n }}</option>
+        }
+      </select>
+    </label>
+    <button type="button" data-testid="pagination-prev" aria-label="Page précédente" [disabled]="!hasPrevious()" (click)="previous()"
+      class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high disabled:opacity-40">
+      <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+    </button>
+    <span class="font-label-md text-label-md text-on-surface">Page {{ page() + 1 }} / {{ pageCount() }}</span>
+    <button type="button" data-testid="pagination-next" aria-label="Page suivante" [disabled]="!hasNext()" (click)="next()"
+      class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high disabled:opacity-40">
+      <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+    </button>
+  </div>
+</div>

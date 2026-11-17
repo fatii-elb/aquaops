@@ -58,7 +58,7 @@ describe('SensorList', () => {
       providers: [
         provideRouter([]),
         { provide: SensorDataSource, useValue: source },
-        { provide: AuthService, useValue: { username: 'test', logout: vi.fn() } },
+        { provide: AuthService, useValue: { username: 'test', logout: vi.fn(), hasAnyRole: () => false } },
         {
           provide: NotificationStream,
           useValue: {

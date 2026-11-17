@@ -1,0 +1,43 @@
+# =============================================================================
+# AquaOps: OPTIONAL Eureka overlay for the integration stack.
+# Card [TECH] Eureka et routage Gateway · E5
+#
+# Never used unless named with -f. From the repository root:
+#     docker compose -f deploy/integration/docker-compose.integration.yml \
+#                    -f deploy/integration/compose.eureka.yml up -d --build
+#
+# Adds the Eureka server and switches the gateway to Eureka routing
+# (profile "eureka"). Migration one service at a time:
+#   - assets-service has the Eureka client: it registers, and the gateway
+#     reaches it as lb://assets-service;
+#   - the other services have no client yet: the gateway keeps their fixed
+#     address (the *_URL of the base file). When a service gets its client,
+#     add its EUREKA_* variables below and set its *_URL to lb://<name>.
+# Back to the Sprint 4 routing: run the base file alone.
+# =============================================================================
+
+services:
+
+  eureka:
+    image: aquaops/eureka-server:dev
+    pull_policy: never            # local image only, built from the repository
+    build:
+      context: ../../services/eureka-server
+      dockerfile: ../../deploy/docker/spring-service.Dockerfile
+    environment:
+      HEALTHCHECK_PORT: "8761"
+      EUREKA_HOSTNAME: eureka
+    # No host port: the registry has no authentication. Dashboard, if needed:
+    #     docker compose ... exec gateway curl -s http://eureka:8761/eureka/apps
+    restart: unless-stopped
+
+  gateway:
+    environment:
+      SPRING_PROFILES_ACTIVE: eureka
+      EUREKA_URL: http://eureka:8761/eureka
+      ASSETS_URL: lb://assets-service
+
+  assets:
+    environment:
+      EUREKA_ENABLED: "true"
+      EUREKA_URL: http://eureka:8761/eureka

@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: assets
+  namespace: aquaops
+  labels: { app: assets }
+spec:
+  selector: { app: assets }
+  ports:
+    - { name: http, port: 8082, targetPort: http }
+---
+# Au plus un pod volontairement indisponible à la fois (drain d'un nœud, mise à jour du cluster).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: assets
+  namespace: aquaops
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: { app: assets }

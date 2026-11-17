@@ -1,0 +1,48 @@
+# NFR-14 : HTTPS à l'entrée du cluster (Traefik, fourni par k3s), certificat auto-signé émis par cert-manager.
+# Pour un certificat de confiance, remplacer l'émetteur par ACME (Let's Encrypt) : impossible sans nom de domaine public.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: aquaops-selfsigned
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: aquaops-tls
+  namespace: aquaops
+spec:
+  secretName: aquaops-tls
+  duration: 2160h        # 90 jours
+  renewBefore: 360h
+  dnsNames: [aquaops.local]
+  privateKey: { algorithm: RSA, size: 2048 }
+  issuerRef:
+    name: aquaops-selfsigned
+    kind: ClusterIssuer
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aquaops
+  namespace: aquaops
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Options TLS (tlsoption.yaml) : forme <espace de noms>-<nom>@kubernetescrd
+    traefik.ingress.kubernetes.io/router.tls.options: aquaops-aquaops-tls-options@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [aquaops.local]
+      secretName: aquaops-tls
+  rules:
+    - host: aquaops.local
+      http:
+        paths:
+          # Le frontend (nginx) sert l'application et transmet /api/ à la passerelle.
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: frontend, port: { number: 8080 } }

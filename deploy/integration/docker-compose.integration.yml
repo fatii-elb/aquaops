@@ -99,6 +99,7 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:?KEYCLOAK_ADMIN is required, see .env.example}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required, see .env.example}
       KC_HEALTH_ENABLED: "true"       # /health/ready on the management port 9000
+      KEYCLOAK_AUDIT_CLIENT_SECRET: ${KEYCLOAK_AUDIT_CLIENT_SECRET:-integration-only}   # realm import placeholder
     volumes:
       - ../../docs/keycloak:/opt/keycloak/data/import:ro   # realm export (E2), read only
     healthcheck:

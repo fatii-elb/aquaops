@@ -1,11 +1,13 @@
 
 package ma.aquaops.detection.config;
 
+import ma.aquaops.detection.engine.AnomalyRecoveryListener;
 import ma.aquaops.detection.engine.DetectionEngine;
 import ma.aquaops.detection.rules.LeakRule;
 import ma.aquaops.detection.rules.PumpFaultRule;
 import ma.aquaops.detection.rules.Rule;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,8 +49,11 @@ public class DetectionConfig {
 
     @Bean
     public DetectionEngine detectionEngine(
-            List<Rule> rules) {
+            List<Rule> rules,
+            ObjectProvider<AnomalyRecoveryListener> recoveryListener) {
 
-        return new DetectionEngine(rules);
+        DetectionEngine engine = new DetectionEngine(rules);
+        recoveryListener.ifAvailable(engine::setRecoveryListener);
+        return engine;
     }
 }

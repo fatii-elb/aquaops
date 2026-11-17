@@ -1,0 +1,70 @@
+# NFR-05 : service des actifs, 2 réplicas, sondes Actuator, mise à jour sans coupure.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assets
+  namespace: aquaops
+  labels: { app: assets }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0      # un pod n'est retiré que lorsque son remplaçant est prêt
+      maxSurge: 1
+  selector:
+    matchLabels: { app: assets }
+  template:
+    metadata:
+      labels: { app: assets }
+    spec:
+      terminationGracePeriodSeconds: 40   # > timeout-per-shutdown-phase (20 s) de l'application
+      # runAsNonRoot est volontairement absent : l'image utilise un utilisateur nommé ("aquaops"), que Kubernetes
+      # ne sait pas vérifier. L'image ne tourne déjà pas en root (voir deploy/docker/spring-service.Dockerfile).
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: assets
+          image: ghcr.io/fatii-elb/aquaops/assets:IMAGE_TAG
+          ports:
+            - { name: http, containerPort: 8082 }
+          env:
+            - { name: ASSETS_PORT, value: "8082" }
+            - { name: HEALTHCHECK_PORT, value: "8082" }
+            - { name: ASSETS_DB_URL, value: "jdbc:postgresql://postgres:5432/aquaops_assets" }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
+            # Doit être identique à l'émetteur ("iss") des jetons : voir deploy/README.md, « Issuer Keycloak ».
+            - { name: KEYCLOAK_ISSUER_URI, value: "http://keycloak:8180/realms/aquaops" }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: aquaops-db, key: DB_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: aquaops-db, key: DB_PASSWORD } }
+            # Inscription dans Eureka : retirer ces deux lignes pour travailler sans registre.
+            - { name: EUREKA_ENABLED, value: "true" }
+            - { name: EUREKA_URL, value: "http://eureka:8761/eureka" }
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { cpu: "1", memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          # Démarrage de la JVM et de Spring : jusqu'à 150 s avant que liveness ne s'applique.
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 30
+          # Liveness : le processus répond. Un échec redémarre le conteneur.
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness : prêt à recevoir du trafic. Un échec retire le pod du Service, sans le redémarrer.
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }   # laisse le temps au Service de retirer le pod avant l'arrêt

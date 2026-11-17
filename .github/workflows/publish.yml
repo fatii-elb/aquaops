@@ -2,9 +2,10 @@
 # AquaOps image pipeline on main: test the exact commit, then build the images.
 # Card SCRUM-55 / NFR-08 · E5
 #
-# Publication to GHCR is prepared but OFF (GHCR_PUBLISH below). It can only be
-# switched "on" once Trivy blocks CRITICAL vulnerabilities (TRIVY_EXIT_CODE
-# '1', decision of E4): the "publish-policy" job refuses otherwise.
+# Publication to GHCR and deployment to the test VM are ON (GHCR_PUBLISH and
+# DEPLOY_TEST below). Both require Trivy to block CRITICAL vulnerabilities
+# (TRIVY_EXIT_CODE '1', decision of E4): the "publish-policy" job refuses
+# otherwise, and so does the deployment wrapper on the VM.
 #
 #   push to main (commit S)
 #     ci           the CI workflow (ci.yml) on S: Java, PostgreSQL, Angular
@@ -22,10 +23,14 @@
 #                  succeeded: reloads the 8 SCANNED images (no rebuild), checks
 #                  they are identical, then (mode "on") pushes them with their
 #                  full-SHA tag. The only job with packages: write.
+#     deploy-test  only after "Images result" and a real publication ("on"),
+#                  on the self-hosted runner of the test VM: asks the wrapper
+#                  deploy/vm/aquaops-deploy to deploy this exact commit (pull,
+#                  up, wait-healthy, smoke test, NFR-08 time).
 #
 # Trivy (SCRUM-63 / NFR-16, E4): each image is loaded into the job and scanned
-# before anything could be pushed. AUDIT MODE for now (TRIVY_EXIT_CODE below):
-# reports only, no failure.
+# before anything could be pushed. BLOCKING (TRIVY_EXIT_CODE '1'): a fixable
+# CRITICAL vulnerability fails the build; HIGH is reported only.
 # Accepted exceptions: deploy/trivy/.trivyignore (one line + reason each).
 # Actions are pinned to a commit SHA; the comment gives the release tag.
 # =============================================================================
@@ -46,21 +51,30 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Future registry path (lowercase, as GHCR requires). Only used as a local
-  # tag while push is false.
+  # Registry path (lowercase, as GHCR requires). Images are pushed there only by
+  # the publish job, with their full-SHA tag.
   IMAGE_NAMESPACE: ghcr.io/fatii-elb/aquaops
   # Trivy mode (SCRUM-63): '0' = audit, reports only, never blocks the pipeline;
   # '1' = enforce, a CRITICAL vulnerability fails the job (NFR-16 target).
   # Switch to '1' once the images are clean.
-  TRIVY_EXIT_CODE: '0'
+  TRIVY_EXIT_CODE: '1'
   # GHCR publication (SCRUM-55 / NFR-08, E5):
-  #   'off'     nothing is exported or published (current setting)
+  #   'off'     nothing is exported or published
   #   'dry-run' the 8 scanned images go through the whole publish path
   #             (export, reload, identity check) WITHOUT any registry login
   #             or push: measures the extra time, publishes nothing
-  #   'on'      the same, then pushes ghcr.io/...:<full SHA>. Refused while
-  #             TRIVY_EXIT_CODE is not '1'. Never a "latest" tag.
-  GHCR_PUBLISH: 'off'
+  #   'on'      the same, then pushes ghcr.io/...:<full SHA> (current setting).
+  #             Refused while TRIVY_EXIT_CODE is not '1'. Never a "latest" tag.
+  GHCR_PUBLISH: 'on'
+  # Automatic deployment to the test VM (SCRUM-55 / NFR-08, E5):
+  #   'off'  no deployment job runs (emergency stop: set back to 'off')
+  #   'on'   after every successful pipeline on main, deploy this commit through
+  #          the wrapper on the runner labelled aquaops-test (current setting).
+  #          Refused unless GHCR_PUBLISH is 'on' (which itself requires
+  #          TRIVY_EXIT_CODE '1'): only blocked-and-published images are deployed.
+  #          The wrapper reads these three lines in the commit it deploys.
+  # Needs: the runner and the VM prepared (deploy/README.md § 7).
+  DEPLOY_TEST: 'on'
 
 jobs:
 
@@ -314,9 +328,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
-  # GHCR switch, checked against the Trivy policy. No token needed at all.
+  # GHCR and deployment switches, checked against the Trivy policy. No token.
   # "on" while Trivy is audit-only is refused: it fails here (and therefore
-  # "Images result") instead of publishing unblocked images.
+  # "Images result") instead of publishing unblocked images. DEPLOY_TEST "on"
+  # is refused unless publication is really "on".
   # ---------------------------------------------------------------------------
   publish-policy:
     name: Publish policy
@@ -325,8 +340,9 @@ jobs:
     permissions: {}
     outputs:
       mode: ${{ steps.policy.outputs.mode }}
+      deploy: ${{ steps.policy.outputs.deploy }}
     steps:
-      - name: Check GHCR_PUBLISH against TRIVY_EXIT_CODE
+      - name: Check GHCR_PUBLISH and DEPLOY_TEST against TRIVY_EXIT_CODE
         id: policy
         run: |
           case "$GHCR_PUBLISH" in
@@ -342,8 +358,22 @@ jobs:
               echo "::error::GHCR_PUBLISH must be off, dry-run or on, got [$GHCR_PUBLISH]"
               exit 1 ;;
           esac
+          case "$DEPLOY_TEST" in
+            off)
+              deploy=off ;;
+            on)
+              if [ "$mode" != "on" ] || [ "$TRIVY_EXIT_CODE" != "1" ]; then
+                echo "::error::DEPLOY_TEST=on refused: needs GHCR_PUBLISH=on and blocking Trivy (got mode=$mode, TRIVY_EXIT_CODE=$TRIVY_EXIT_CODE)."
+                exit 1
+              fi
+              deploy=on ;;
+            *)
+              echo "::error::DEPLOY_TEST must be off or on, got [$DEPLOY_TEST]"
+              exit 1 ;;
+          esac
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "GHCR publication mode: $mode (TRIVY_EXIT_CODE=$TRIVY_EXIT_CODE)"
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          echo "GHCR publication mode: $mode, test deployment: $deploy (TRIVY_EXIT_CODE=$TRIVY_EXIT_CODE)"
 
   # ---------------------------------------------------------------------------
   # Publication of the 8 SCANNED images. No checkout, no rebuild, no scanner:
@@ -484,3 +514,72 @@ jobs:
               echo "::error::Unknown publication mode [$PUBLISH_MODE]"
               exit 1 ;;
           esac
+
+  # ---------------------------------------------------------------------------
+  # Automatic deployment of THIS commit to the test VM (SCRUM-55 / NFR-08).
+  # Off unless DEPLOY_TEST is 'on' (see publish-policy). No status function in
+  # "if": it runs only if "Images result", the publication and the policy all
+  # succeeded, i.e. CI, Gitleaks, the 8 builds, their blocking Trivy gates and
+  # the GHCR push of the 8 images. Push to main of this repository only: this
+  # workflow has no pull_request trigger, and the condition repeats it.
+  # Labels, conditions and the environment reduce mistakes; they are not a
+  # security boundary on their own (deploy/README.md, runner section).
+  # The runner account has no Docker access: it only asks the wrapper the VM
+  # administrator installed (deploy/vm/aquaops-deploy, one sudoers rule) to
+  # deploy this commit. All deployment commands live in that wrapper and in
+  # deploy/scripts/deploy-test.sh, which it runs.
+  # ---------------------------------------------------------------------------
+  deploy-test:
+    name: Deploy to test VM
+    needs: [images, publish, publish-policy]
+    if: >-
+      needs.publish-policy.outputs.deploy == 'on'
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && github.repository == 'fatii-elb/aquaops'
+    # Dedicated self-hosted runner of the test VM. Only this label is required,
+    # so the runner may be registered with or without the default labels.
+    runs-on: [aquaops-test]
+    # Approval and branch rules, as far as the repository plan allows them.
+    environment: test
+    timeout-minutes: 20
+    # One deployment at a time; a newer commit waits, never cancels a running one.
+    concurrency:
+      group: aquaops-deploy-test
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      # Defence in depth: same rules as publish-policy, checked again on the VM
+      # side before the deployment is requested.
+      - name: Check activation rules
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          [ "$DEPLOY_TEST" = "on" ] || { echo "::error::DEPLOY_TEST is not on"; exit 1; }
+          [ "$GHCR_PUBLISH" = "on" ] || { echo "::error::GHCR publication is not on"; exit 1; }
+          [ "$TRIVY_EXIT_CODE" = "1" ] || { echo "::error::Trivy is not blocking"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::not a full commit SHA: $SHA"; exit 1; }
+          echo "Deploying $SHA"
+
+      # No checkout: the runner's workspace is never used for the deployment.
+      # The wrapper (as aquaops-deploy) refuses a commit that is not on main or
+      # whose publish.yml does not set the three switches above to 'on'/'on'/'1',
+      # exports that commit's deploy files to its own folder and runs its
+      # deploy-test.sh with fixed settings (/etc/aquaops/test.env, project
+      # aquaops-test, compose.infra.yml): temporary GHCR login, exact pull,
+      # up without build, wait-healthy (health + exact image), gateway smoke
+      # test, push-to-healthy time against the 1200 s NFR-08 budget.
+      # The job token (contents: read for the fetch of main, packages: read for
+      # the pull) goes through stdin only: never on a command line or on disk.
+      - name: Deploy and verify (aquaops-deploy wrapper)
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          # Epoch seconds of the push to main: start of the NFR-08 measurement.
+          PUSHED_AT: ${{ github.event.repository.pushed_at }}
+          GHCR_USERNAME: ${{ github.actor }}
+          DEPLOY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s\n%s\n' "$DEPLOY_TOKEN" "$GHCR_USERNAME" \
+            | sudo -n -u aquaops-deploy /usr/local/sbin/aquaops-deploy "$IMAGE_TAG" "$PUSHED_AT"

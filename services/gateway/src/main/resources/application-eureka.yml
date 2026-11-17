@@ -1,0 +1,37 @@
+# Eureka routing, active with SPRING_PROFILES_ACTIVE=eureka.
+#
+# Each route goes to lb://<spring.application.name of the service>: the
+# gateway asks Eureka for the instances and spreads the requests over them.
+# Migration one service at a time: while a service has no Eureka client yet,
+# give its *_URL (fixed address) and that route alone stays as in Sprint 4.
+aquaops:
+  gateway:
+    targets:
+      telemetry: ${TELEMETRY_URL:lb://telemetry-service}
+      assets: ${ASSETS_URL:lb://assets-service}
+      detection: ${DETECTION_URL:lb://detection-service}
+      incidents: ${INCIDENTS_URL:lb://incidents-service}
+      notifications: ${NOTIFICATIONS_URL:lb://notifications-service}
+      simulator: ${SIMULATOR_URL:lb://simulator}
+
+eureka:
+  client:
+    enabled: true
+    service-url:
+      # Docker / Kubernetes: http://eureka:8761/eureka
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    # Fresh copy of the registry every 5 s (default 30 s).
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${spring.cloud.client.ip-address}:${server.port}
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 15
+
+spring:
+  cloud:
+    loadbalancer:
+      # No second cache on top of the Eureka copy (default: 35 s), so a
+      # stopped instance stops receiving requests as soon as Eureka drops it.
+      cache:
+        enabled: false

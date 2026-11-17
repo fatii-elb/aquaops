@@ -1,0 +1,62 @@
+<div class="fixed inset-0 z-[60] flex items-center justify-center p-space-xl">
+  <div class="absolute inset-0 bg-inverse-surface/40 backdrop-blur-[2px]" (click)="cancelled.emit()" aria-hidden="true"></div>
+  <div role="alertdialog" aria-modal="true" aria-labelledby="delete-title" data-testid="delete-dialog"
+    class="relative flex w-full max-w-lg flex-col gap-space-lg rounded-xl bg-surface-container-lowest p-space-2xl shadow-2xl">
+    <div class="flex items-start gap-space-md">
+      <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full {{ target().verdict.allowed ? 'bg-error-container text-error' : 'bg-secondary-container text-on-secondary-container' }}">
+        <span class="material-symbols-outlined text-[24px]">{{ target().verdict.allowed ? 'delete' : 'lock' }}</span>
+      </span>
+      <div class="min-w-0">
+        <h2 id="delete-title" class="font-headline-md text-headline-md text-on-surface">
+          {{ target().verdict.allowed ? 'Supprimer' : 'Suppression impossible :' }} {{ singular() }} « {{ target().ref.name }} »
+        </h2>
+        @if (target().verdict.allowed) {
+          <p class="mt-space-2xs font-body-md text-body-md text-on-surface-variant">Cette action est définitive. L'opération sera enregistrée dans le journal d'audit.</p>
+        }
+      </div>
+    </div>
+
+    @if (!target().verdict.allowed) {
+      <div data-testid="delete-blocked" class="flex flex-col gap-space-sm rounded-lg bg-surface-container-low p-space-lg">
+        <p class="font-body-md text-body-md text-on-surface">{{ target().verdict.reason }}</p>
+        <ul class="flex flex-wrap gap-space-xs">
+          @for (ref of shown(); track ref.category + ref.id) {
+            <li>
+              <button type="button" (click)="openRef.emit(ref)"
+                class="flex items-center gap-space-2xs rounded-full bg-surface-container-lowest px-space-sm py-space-2xs font-label-sm text-label-sm text-primary shadow-sm transition-colors hover:bg-primary-fixed">
+                <span class="material-symbols-outlined text-[14px]">{{ icon(ref) }}</span>{{ ref.name }}
+              </button>
+            </li>
+          }
+        </ul>
+        @if (hidden() > 0) {
+          <p class="font-label-sm text-label-sm text-secondary">… et {{ hidden() }} autre(s).</p>
+        }
+        <p class="font-label-sm text-label-sm text-secondary">
+          Règle appliquée par l'interface : le serveur ne contrôle pas encore ces dépendances et devrait aussi les vérifier.
+        </p>
+      </div>
+    }
+
+    @if (error(); as message) {
+      <div role="alert" data-testid="delete-error" class="flex items-center gap-space-sm rounded-lg bg-error-container px-space-md py-space-sm text-on-error-container">
+        <span class="material-symbols-outlined text-[18px]">error</span>
+        <p class="font-body-md text-body-md">{{ message }}</p>
+      </div>
+    }
+
+    <div class="flex justify-end gap-space-sm">
+      <button type="button" data-testid="cancel-delete" (click)="cancelled.emit()"
+        class="rounded-lg bg-surface-container-low px-space-lg py-space-sm font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container">
+        {{ target().verdict.allowed ? 'Annuler' : 'Fermer' }}
+      </button>
+      @if (target().verdict.allowed) {
+        <button type="button" data-testid="confirm-delete" [disabled]="busy()" (click)="confirmed.emit()"
+          class="flex items-center gap-space-xs rounded-lg bg-error px-space-lg py-space-sm font-label-md text-label-md text-on-error shadow-sm transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-60">
+          <span class="material-symbols-outlined text-[18px] {{ busy() ? 'animate-spin' : '' }}">{{ busy() ? 'progress_activity' : 'delete' }}</span>
+          {{ busy() ? 'Suppression…' : 'Supprimer' }}
+        </button>
+      }
+    </div>
+  </div>
+</div>

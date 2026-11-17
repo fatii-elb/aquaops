@@ -1,0 +1,173 @@
+<div class="fixed inset-0 z-[60] flex justify-end">
+  <div class="absolute inset-0 bg-inverse-surface/40 backdrop-blur-[2px]" (click)="cancelled.emit()" aria-hidden="true"></div>
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate role="dialog" aria-modal="true" aria-labelledby="form-title" data-testid="asset-form"
+    class="relative flex h-full w-full max-w-md flex-col bg-surface-container-lowest shadow-2xl">
+    <header class="flex items-start justify-between gap-space-md bg-surface-container-low px-space-2xl py-space-xl">
+      <div class="flex min-w-0 items-center gap-space-md">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary shadow-sm">
+          <span class="material-symbols-outlined text-[24px]">{{ editing() ? 'edit' : 'add' }}</span>
+        </span>
+        <div class="min-w-0">
+          <p class="font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">{{ editing() ? 'Modification' : 'Nouvel actif' }}</p>
+          <h2 id="form-title" class="truncate font-headline-md text-headline-md text-on-surface">
+            {{ editing() ? 'Modifier ' + (meta().feminine ? 'la ' : 'le ') + meta().singular : 'Ajouter un actif' }}
+          </h2>
+        </div>
+      </div>
+      <button type="button" (click)="cancelled.emit()" aria-label="Fermer le formulaire"
+        class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface">
+        <span class="material-symbols-outlined text-[22px]">close</span>
+      </button>
+    </header>
+
+    <div class="flex flex-1 flex-col gap-space-lg overflow-y-auto px-space-2xl py-space-xl">
+      @if (error(); as err) {
+        <div role="alert" data-testid="form-error" class="flex items-start gap-space-sm rounded-lg bg-error-container px-space-md py-space-sm text-on-error-container">
+          <span class="material-symbols-outlined mt-px text-[18px]">error</span>
+          <p class="font-body-md text-body-md">{{ err.message }}</p>
+        </div>
+      }
+
+      @if (!editing()) {
+        <label class="flex flex-col gap-space-xs">
+          <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Type d'actif</span>
+          <select data-testid="field-category" [value]="category()" (change)="changeCategory($any($event.target).value)"
+            class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+            @for (c of categories; track c.key) {
+              <option [value]="c.key" [selected]="c.key === category()">{{ c.singular.charAt(0).toUpperCase() + c.singular.slice(1) }}</option>
+            }
+          </select>
+        </label>
+      }
+
+      <label class="flex flex-col gap-space-xs">
+        <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Nom <span class="text-error">*</span></span>
+        <input type="text" formControlName="name" autocomplete="off" maxlength="255" placeholder="Ex. Conduite principale Z1"
+          [attr.aria-invalid]="errorOf('name') ? 'true' : null"
+          class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none placeholder:text-secondary/70 focus:ring-1 focus:ring-primary" />
+        @if (errorOf('name'); as msg) {
+          <span class="font-label-sm text-label-sm text-error" data-testid="error-name">{{ msg }}</span>
+        }
+      </label>
+
+      @if (category() === 'zones') {
+        <label class="flex flex-col gap-space-xs">
+          <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Description</span>
+          <textarea formControlName="description" rows="3" maxlength="255" placeholder="Facultatif"
+            class="w-full resize-none rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none placeholder:text-secondary/70 focus:ring-1 focus:ring-primary"></textarea>
+          @if (errorOf('description'); as msg) {
+            <span class="font-label-sm text-label-sm text-error">{{ msg }}</span>
+          }
+        </label>
+      } @else {
+        <label class="flex flex-col gap-space-xs">
+          <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Zone <span class="text-error">*</span></span>
+          <select formControlName="zoneId" [attr.aria-invalid]="errorOf('zoneId') ? 'true' : null"
+            class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+            <option [ngValue]="null">Choisir une zone…</option>
+            @for (z of snapshot().zones; track z.id) {
+              <option [ngValue]="z.id">{{ z.name }}</option>
+            }
+          </select>
+          @if (errorOf('zoneId'); as msg) {
+            <span class="font-label-sm text-label-sm text-error" data-testid="error-zoneId">{{ msg }}</span>
+          }
+          @if (snapshot().zones.length === 0) {
+            <span class="font-label-sm text-label-sm text-secondary">Aucune zone n'existe : créez d'abord une zone.</span>
+          }
+        </label>
+      }
+
+      @switch (category()) {
+        @case ('pipes') {
+          <div class="grid grid-cols-2 gap-space-lg">
+            <label class="flex flex-col gap-space-xs">
+              <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Longueur (m)</span>
+              <input type="number" formControlName="lengthM" min="0" step="any" placeholder="500"
+                class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary" />
+              @if (errorOf('lengthM'); as msg) {
+                <span class="font-label-sm text-label-sm text-error">{{ msg }}</span>
+              }
+            </label>
+            <label class="flex flex-col gap-space-xs">
+              <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Diamètre (mm)</span>
+              <input type="number" formControlName="diameterMm" min="0" step="1" placeholder="200"
+                class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary" />
+              @if (errorOf('diameterMm'); as msg) {
+                <span class="font-label-sm text-label-sm text-error">{{ msg }}</span>
+              }
+            </label>
+          </div>
+        }
+        @case ('tanks') {
+          <label class="flex flex-col gap-space-xs">
+            <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Capacité (m³)</span>
+            <input type="number" formControlName="capacityM3" min="0" step="any" placeholder="1000"
+              class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary" />
+            @if (errorOf('capacityM3'); as msg) {
+              <span class="font-label-sm text-label-sm text-error">{{ msg }}</span>
+            }
+          </label>
+        }
+        @case ('sensors') {
+          <label class="flex flex-col gap-space-xs">
+            <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Type de mesure <span class="text-error">*</span></span>
+            <select formControlName="type"
+              class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+              <option [ngValue]="null">Choisir un type…</option>
+              @for (t of sensorTypes; track t) {
+                <option [ngValue]="t">{{ sensorTypeLabels[t] }}</option>
+              }
+            </select>
+            @if (errorOf('type'); as msg) {
+              <span class="font-label-sm text-label-sm text-error">{{ msg }}</span>
+            }
+          </label>
+          <div class="grid grid-cols-2 gap-space-lg">
+            <label class="flex flex-col gap-space-xs">
+              <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Type d'actif <span class="text-error">*</span></span>
+              <select formControlName="assetType"
+                class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+                <option [ngValue]="null">Choisir…</option>
+                @for (k of assetKinds; track k) {
+                  <option [ngValue]="k">{{ assetKindLabels[k] }}</option>
+                }
+              </select>
+              @if (errorOf('assetType'); as msg) {
+                <span class="font-label-sm text-label-sm text-error">{{ msg }}</span>
+              }
+            </label>
+            <label class="flex flex-col gap-space-xs">
+              <span class="font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Actif rattaché <span class="text-error">*</span></span>
+              <select formControlName="assetId"
+                class="w-full rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+                <option [ngValue]="null">Choisir…</option>
+                @for (o of assetOptions(); track o.id) {
+                  <option [ngValue]="o.id">{{ o.label }}</option>
+                }
+              </select>
+              @if (errorOf('assetId'); as msg) {
+                <span class="font-label-sm text-label-sm text-error" data-testid="error-assetId">{{ msg }}</span>
+              }
+            </label>
+          </div>
+          <p class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-label-sm text-label-sm text-on-surface-variant">
+            Les actifs proposés sont ceux du type choisi, situés dans la zone sélectionnée.
+          </p>
+        }
+      }
+    </div>
+
+    <footer class="flex justify-end gap-space-sm bg-surface-container-low px-space-2xl py-space-lg">
+      <button type="button" data-testid="form-cancel" (click)="cancelled.emit()"
+        class="rounded-lg bg-surface-container-lowest px-space-lg py-space-sm font-label-md text-label-md text-on-surface shadow-sm transition-colors hover:bg-surface-container">
+        Annuler
+      </button>
+      <button type="submit" data-testid="form-submit" [disabled]="saving()"
+        class="flex items-center gap-space-xs rounded-lg bg-linear-to-r from-primary to-primary-container px-space-lg py-space-sm font-label-md text-label-md text-on-primary shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60">
+        <span class="material-symbols-outlined text-[18px] {{ saving() ? 'animate-spin' : '' }}">{{ saving() ? 'progress_activity' : 'check' }}</span>
+        {{ saving() ? 'Enregistrement…' : editing() ? 'Enregistrer' : 'Créer' }}
+      </button>
+    </footer>
+  </form>
+</div>
