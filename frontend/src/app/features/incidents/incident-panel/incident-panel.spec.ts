@@ -57,6 +57,19 @@ describe('IncidentPanel', () => {
     expect(button(el, 'ASSIGNED')).toBeNull();
   });
 
+  it.each([
+    ['OPEN', ['CONFIRMED', 'CLOSED']],
+    ['CONFIRMED', ['ASSIGNED', 'CLOSED']],
+    ['ASSIGNED', ['IN_PROGRESS', 'CLOSED']],
+    ['IN_PROGRESS', ['RESOLVED', 'CLOSED']],
+    ['RESOLVED', ['CLOSED']],
+    ['CLOSED', []],
+  ] as const)('état %s : propose exactement les actions %j (cycle de vie FR-17)', (status, expected) => {
+    const el: HTMLElement = create({ ...sampleIncident, status }).nativeElement;
+    const shown = Array.from(el.querySelectorAll<HTMLElement>('[data-action]')).map((b) => b.dataset['action']);
+    expect([...shown].sort()).toEqual([...expected].sort());
+  });
+
   it("Confirmer envoie PUT {status: CONFIRMED}, met l'écran à jour, recharge l'historique et prévient la liste", () => {
     const fixture = create();
     let changed = 0;
