@@ -1,0 +1,74 @@
+<app-shell title="Observabilité" active="observability">
+  <div class="flex flex-col gap-space-xl p-space-xl lg:p-space-2xl">
+
+    <!-- ===== En-tête ===== -->
+    <section class="flex flex-col justify-between gap-space-lg rounded-xl bg-surface-container-lowest p-space-xl shadow-sm lg:flex-row lg:items-center">
+      <div class="flex min-w-0 flex-col gap-space-2xs">
+        <h1 class="font-display-md text-display-md tracking-tight text-on-surface">Observabilité</h1>
+        <p class="max-w-3xl font-body-md text-body-md text-on-surface-variant">
+          État des services AquaOps et accès aux outils de supervision. Le contrôle est rafraîchi toutes les {{ refreshMs / 1000 }} secondes.
+        </p>
+        @if (lastCheckedAt()) {
+          <p class="font-label-sm text-label-sm text-secondary" data-testid="last-checked">
+            Dernier contrôle : {{ lastCheckedAt() }}
+          </p>
+        }
+      </div>
+    </section>
+
+    <!-- ===== Erreur ===== -->
+    @if (error()) {
+      <div role="alert" data-testid="error" class="flex flex-col gap-space-sm rounded-xl bg-error-container p-space-lg">
+        <p class="font-label-md text-label-md text-on-error-container">{{ error() }}</p>
+        <div>
+          <button type="button" (click)="retry()" data-testid="retry"
+            class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest">
+            Réessayer
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- ===== Chargement ===== -->
+    @if (loading() && !error()) {
+      <p data-testid="loading" class="font-body-md text-body-md text-secondary">Contrôle des services…</p>
+    }
+
+    <!-- ===== Liste des services ===== -->
+    @if (!error()) {
+      <section aria-label="État des services" class="grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-3" data-testid="services">
+        @for (s of statuses(); track s.key) {
+          <article class="flex flex-col gap-space-xs rounded-xl bg-surface-container-lowest p-space-xl shadow-sm" [attr.data-testid]="'service-' + s.key">
+            <div class="flex items-center justify-between gap-space-sm">
+              <h2 class="font-headline-md text-headline-md text-on-surface">{{ s.label }}</h2>
+              <span class="rounded-full px-3 py-1 font-label-sm text-label-sm font-semibold {{ stateClass(s.state) }}" [attr.data-testid]="'state-' + s.key">
+                {{ stateLabel(s.state) }}
+              </span>
+            </div>
+            <p class="font-label-sm text-label-sm text-secondary">
+              Dernier contrôle : {{ s.checkedAt }}
+            </p>
+          </article>
+        }
+      </section>
+
+      @if (statuses().length === 0 && !loading()) {
+        <p data-testid="empty" class="rounded-xl bg-surface-container-lowest p-space-xl font-body-md text-body-md text-secondary shadow-sm">
+          Aucun service à superviser.
+        </p>
+      }
+
+      <!-- ===== Outils de supervision ===== -->
+      <section aria-label="Outils de supervision" class="flex flex-col gap-space-sm rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+        <h2 class="font-headline-md text-headline-md text-on-surface">Outils de supervision</h2>
+        <p class="font-body-md text-body-md text-on-surface-variant">
+          Les panneaux Grafana et les traces seront activés au Sprint 5 (NFR-10, NFR-11). En attendant, les liens sont configurables.
+        </p>
+        <ul class="flex flex-wrap gap-space-md font-label-md text-label-md">
+          <li><a class="text-primary underline" href="#" data-testid="link-grafana">Grafana</a></li>
+          <li><a class="text-primary underline" href="#" data-testid="link-traces">Traces</a></li>
+        </ul>
+      </section>
+    }
+  </div>
+</app-shell>
