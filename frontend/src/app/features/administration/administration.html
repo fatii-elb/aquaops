@@ -1,0 +1,83 @@
+<app-shell title="Administration" active="admin">
+  <div class="mx-auto w-full max-w-7xl px-space-xl pb-space-3xl pt-space-xl">
+    <p class="mb-space-lg font-body-md text-body-md text-secondary">
+      Outils d'administration et équipes d'intervention. Les utilisateurs et les rôles se gèrent dans la console Keycloak.
+    </p>
+
+    <!-- ===== Outils ===== -->
+    <section aria-label="Outils d'administration" class="mb-space-xl">
+      <h2 class="mb-space-md font-headline-md text-headline-md font-bold text-on-surface">Outils</h2>
+      <div class="grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-4">
+        @for (tool of tools(); track tool.key) {
+          @if (tool.href) {
+            <a [href]="tool.href" target="_blank" rel="noopener noreferrer" data-testid="tool-link"
+              class="flex flex-col gap-space-xs rounded-xl bg-surface-container-lowest p-space-lg shadow-sm transition-colors hover:bg-surface-container-low">
+              <span class="material-symbols-outlined text-[24px] text-primary">{{ tool.icon }}</span>
+              <span class="font-label-md text-label-md font-semibold text-on-surface">{{ tool.label }}</span>
+              <span class="font-body-sm text-body-sm text-secondary">{{ tool.description }}</span>
+              <span class="mt-space-xs inline-flex items-center gap-1 font-label-sm text-label-sm font-semibold text-primary">
+                Ouvrir <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+              </span>
+            </a>
+          } @else {
+            <div data-testid="tool-soon" class="flex flex-col gap-space-xs rounded-xl bg-surface-container-lowest p-space-lg opacity-70 shadow-sm">
+              <span class="material-symbols-outlined text-[24px] text-secondary">{{ tool.icon }}</span>
+              <span class="font-label-md text-label-md font-semibold text-on-surface">{{ tool.label }}</span>
+              <span class="font-body-sm text-body-sm text-secondary">{{ tool.description }}</span>
+              <span class="mt-space-xs inline-flex w-fit rounded-full bg-secondary-container px-2 py-0.5 font-label-sm text-label-sm text-on-secondary-container">
+                {{ tool.soon ? 'Bientôt disponible' : 'Indisponible' }}
+              </span>
+            </div>
+          }
+        }
+      </div>
+    </section>
+
+    <!-- ===== Équipes ===== -->
+    <section aria-label="Équipes d'intervention">
+      <h2 class="mb-space-xs font-headline-md text-headline-md font-bold text-on-surface">Équipes d'intervention</h2>
+      <p class="mb-space-md font-body-sm text-body-sm text-secondary" data-testid="teams-note">
+        Liste en lecture seule, déduite des interventions déjà affectées. La création d'équipes n'est pas disponible :
+        aucune API d'équipes n'existe, le nom de l'équipe est saisi au moment de l'affectation.
+      </p>
+
+      @switch (state()) {
+        @case ('loading') {
+          <app-state-block kind="loading" [rows]="3" />
+        }
+        @case ('error') {
+          <app-state-block kind="error" title="Équipes indisponibles" [message]="error()" (retry)="load()" />
+        }
+        @case ('empty') {
+          <app-state-block kind="empty" icon="groups" title="Aucune équipe" message="Aucune intervention n'a encore été affectée à une équipe." />
+        }
+        @case ('ready') {
+          <div class="overflow-x-auto rounded-xl bg-surface-container-lowest shadow-sm">
+            <table class="w-full text-left">
+              <thead class="bg-surface-container-low">
+                <tr class="font-label-sm text-label-sm uppercase tracking-wider text-secondary">
+                  <th scope="col" class="px-space-lg py-space-sm font-semibold">Équipe</th>
+                  <th scope="col" class="px-space-lg py-space-sm font-semibold">Interventions</th>
+                  <th scope="col" class="px-space-lg py-space-sm font-semibold">En cours ou planifiées</th>
+                  <th scope="col" class="px-space-lg py-space-sm font-semibold">Terminées</th>
+                  <th scope="col" class="px-space-lg py-space-sm font-semibold">Techniciens</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (team of teams(); track team.name) {
+                  <tr class="border-t border-outline-variant/30 align-top" data-testid="team-row">
+                    <td class="px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface">{{ team.name }}</td>
+                    <td class="px-space-lg py-space-sm font-body-md text-body-md">{{ team.total }}</td>
+                    <td class="px-space-lg py-space-sm font-body-md text-body-md">{{ team.open }}</td>
+                    <td class="px-space-lg py-space-sm font-body-md text-body-md">{{ team.done }}</td>
+                    <td class="px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant">{{ team.members.length ? team.members.join(', ') : '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+    </section>
+  </div>
+</app-shell>

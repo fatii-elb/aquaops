@@ -7,6 +7,7 @@ import { AuthService } from '../../core/auth.service';
 import { EVENT_SOURCE_FACTORY } from '../../core/notification-stream';
 import { ComingSoon } from './coming-soon';
 import { routes } from '../../app.routes';
+import { Observability } from '../observability/observability';
 import { Reports } from '../reports/reports';
 import { SensorList } from '../telemetry/sensor-list';
 import { SensorHistory } from '../telemetry/sensor-history';
@@ -43,13 +44,12 @@ describe('ComingSoon', () => {
 });
 
 describe('routes des pages fonctionnelles et d’attente', () => {
-  it('/observability existe et exige une connexion', () => {
-    const path = 'observability';
-    const route = routes.find((r) => r.path === path);
+  it('/observability utilise la vraie page FE-11, avec garde de rôle et source mock', () => {
+    const route = routes.find((r) => r.path === 'observability');
     expect(route).toBeDefined();
+    expect(route?.component).toBe(Observability);
     expect(route?.canActivate?.length).toBe(1);
-    expect(route?.data?.['title']).toBeTruthy();
-    expect(route?.data?.['active']).toBe(path);
+    expect(route?.providers?.length).toBeGreaterThan(0);
   });
 
   it('/telemetry utilise la liste FE-7 et sa route détaillée affiche l’historique FE-8', () => {
