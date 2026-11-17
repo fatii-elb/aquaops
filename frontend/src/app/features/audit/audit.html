@@ -1,24 +1,5 @@
-<div class="min-h-screen bg-background font-body-md text-body-md text-on-surface antialiased">
-
-  <!-- ===== Barre du haut ===== -->
-  <header class="sticky top-0 z-40 flex h-16 items-center justify-between bg-surface-container-lowest/90 px-space-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl">
-    <div class="flex items-center gap-space-md">
-      <a routerLink="/dashboard" class="flex items-center gap-space-xs rounded-lg px-space-sm py-1 text-secondary transition-colors hover:bg-surface-container-low hover:text-on-surface" title="Retour au tableau de bord">
-        <span class="material-symbols-outlined text-[20px]">arrow_back</span>
-        <span class="font-label-md text-label-md">Tableau de bord</span>
-      </a>
-      <div class="h-4 w-px bg-outline-variant/50"></div>
-      <h1 class="font-headline-md text-headline-md font-bold tracking-tight">Journal d'audit</h1>
-    </div>
-    <div class="flex items-center gap-space-md">
-      <span class="font-label-md text-label-md font-semibold text-on-surface">{{ userName }}</span>
-      <a (click)="logout()" class="rounded-lg p-1.5 text-secondary transition-colors hover:bg-error-container/40 hover:text-error" title="Déconnexion">
-        <span class="material-symbols-outlined text-[18px]">logout</span>
-      </a>
-    </div>
-  </header>
-
-  <main class="mx-auto w-full max-w-7xl px-space-xl pb-space-3xl pt-space-xl">
+<app-shell title="Journal d'audit" active="audit">
+  <div class="mx-auto w-full max-w-7xl px-space-xl pb-space-3xl pt-space-xl">
     <p class="mb-space-lg font-body-md text-body-md text-secondary">
       Qui a fait quoi, et quand : actions sur les actifs, les interventions et les incidents. Les plus récentes d'abord.
     </p>
@@ -127,5 +108,5 @@
         </button>
       </div>
     </nav>
-  </main>
-</div>
+  </div>
+</app-shell>

@@ -1,7 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import { AuthService } from '../../core/auth.service';
+import { AppShell } from '../../core/layout/app-shell';
 import { AuditDataSource } from './audit-data-source';
 import { AUDIT_DATA_SOURCE_CONFIG } from './audit-data-source.config';
 import { actionLabel, entityLabel, errorMessage, periodToIso } from './audit-format';
@@ -13,16 +12,14 @@ import { AuditEntry, AuditQuery } from './audit.model';
  */
 @Component({
   selector: 'app-audit',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, AppShell],
   templateUrl: './audit.html',
   host: { class: 'block' },
 })
 export class Audit implements OnInit {
-  private auth = inject(AuthService);
   private source = inject(AuditDataSource);
 
   readonly pageSize = AUDIT_DATA_SOURCE_CONFIG.pageSize;
-  userName = this.auth.username;
 
   // Champs du formulaire de filtres.
   actor = '';
@@ -70,10 +67,6 @@ export class Audit implements OnInit {
 
   next(): void {
     if (this.page() + 1 < this.totalPages()) this.load(this.page() + 1);
-  }
-
-  logout(): void {
-    this.auth.logout();
   }
 
   private query(page: number): AuditQuery {
