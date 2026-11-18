@@ -30,6 +30,7 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
+    # Options TLS (tlsoption.yaml) : forme <espace de noms>-<nom>@kubernetescrd
     traefik.ingress.kubernetes.io/router.tls.options: aquaops-aquaops-tls-options@kubernetescrd
 spec:
   ingressClassName: traefik

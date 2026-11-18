@@ -6,7 +6,8 @@ ou les intégrer dans son déploiement (SCRUM-56). Rien ici n'a besoin d'un clou
 | Dossier | Carte | Contenu |
 | --- | --- | --- |
 | `assets/` | NFR-05 | Service des actifs : 2 réplicas, sondes liveness/readiness (Actuator), mise à jour sans coupure, arrêt gracieux |
-| `tls/` | NFR-14 | Certificat auto-signé (cert-manager) et Ingress HTTPS (Traefik, fourni par k3s), TLS 1.2 minimum et suites AEAD (`TLSOption`) |
+| `telemetry/` | NFR-05 | Service télémétrie : 2 réplicas, sondes Actuator, mise à jour sans coupure (base du HPA de E1) |
+| `tls/` | NFR-14 | Certificat auto-signé (cert-manager), options TLS (`tlsoption.yaml` : TLS 1.2+ et chiffrements AEAD) et Ingress HTTPS (Traefik, fourni par k3s) |
 
 ## Prérequis (fournis par E5 / le cluster)
 
@@ -21,6 +22,7 @@ ou les intégrer dans son déploiement (SCRUM-56). Rien ici n'a besoin d'un clou
 ```bash
 kubectl create namespace aquaops --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f deploy/k8s/assets/
+kubectl apply -f deploy/k8s/telemetry/
 kubectl apply -f deploy/k8s/tls/          # après cert-manager
 kubectl -n aquaops rollout status deploy/assets
 ```

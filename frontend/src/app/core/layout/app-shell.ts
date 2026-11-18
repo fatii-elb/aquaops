@@ -9,6 +9,7 @@ interface NavItem {
   icon: string;
   label: string;
   link?: string;
+  roles?: string[];
 }
 
 /** Cadre commun des pages : menu à gauche, barre du haut (état du temps réel, cloche), contenu au centre. */
@@ -25,21 +26,28 @@ export class AppShell {
   readonly title = input('Supervision');
   /** Entrée du menu mise en évidence. */
   readonly active = input('incidents');
+  /** Nombre d'anomalies ouvertes, affiché sur l'entrée « Alertes & Anomalies » (rien si nul ou absent). */
+  readonly alertsCount = input<number | null>(null);
 
   protected readonly userName = this.auth.username || 'Utilisateur';
   protected readonly bellOpen = signal(false);
 
-  protected readonly nav: NavItem[] = [
+  /** Même menu, même ordre et mêmes droits que le tableau de bord. */
+  private readonly allNav: NavItem[] = [
     { key: 'dashboard', icon: 'grid_view', label: 'Tableau de bord', link: '/dashboard' },
-    { key: 'assets', icon: 'hub', label: 'Réseau & Actifs' },
-    { key: 'telemetry', icon: 'sensors', label: 'Télémétrie & Capteurs' },
-    { key: 'alerts', icon: 'warning', label: 'Alertes & Anomalies' },
+    { key: 'assets', icon: 'hub', label: 'Réseau & Actifs', link: '/assets', roles: ['administrateur'] },
+    { key: 'telemetry', icon: 'sensors', label: 'Télémétrie & Capteurs', link: '/telemetry' },
+    { key: 'alerts', icon: 'warning', label: 'Alertes & Anomalies', link: '/alerts' },
     { key: 'incidents', icon: 'emergency', label: 'Incidents', link: '/incidents' },
     { key: 'interventions', icon: 'engineering', label: 'Interventions' },
-    { key: 'reports', icon: 'analytics', label: 'Rapports & Analyses' },
-    { key: 'observability', icon: 'monitor_heart', label: 'Observabilité' },
-    { key: 'admin', icon: 'admin_panel_settings', label: 'Administration', link: '/administration' },
+    { key: 'reports', icon: 'analytics', label: 'Rapports & Analyses', link: '/reports' },
+    { key: 'notifications', icon: 'notifications', label: 'Notifications' },
+    { key: 'observability', icon: 'monitor_heart', label: 'Observabilité', link: '/observability', roles: ['superviseur', 'administrateur'] },
+    { key: 'admin', icon: 'admin_panel_settings', label: 'Administration', link: '/administration', roles: ['administrateur'] },
+    { key: 'audit', icon: 'history', label: "Journal d'audit", link: '/audit', roles: ['superviseur', 'administrateur'] },
   ];
+
+  protected readonly nav: NavItem[] = this.allNav.filter((item) => !item.roles || this.auth.hasAnyRole(item.roles));
 
   protected badge(): string {
     const n = this.stream.items().length;

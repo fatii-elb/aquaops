@@ -48,7 +48,7 @@ services:
       - pgdata:/var/lib/postgresql
 
       # Scripts SQL executes UNE SEULE FOIS, quand le volume pgdata est vide
-      # (tout premier demarrage). Ici : creation des 4 bases.
+      # (tout premier demarrage). Ici : creation des 5 bases.
       # ":ro" = lecture seule, le conteneur ne peut pas modifier nos fichiers.
       - ./postgres-init:/docker-entrypoint-initdb.d:ro
 
@@ -167,6 +167,33 @@ services:
       # Le chemin est relatif a ce fichier : ../docs/keycloak = docs/keycloak.
       - ../docs/keycloak:/opt/keycloak/data/import:ro
 
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Eureka : registre des services (carte TECH Eureka, E5).
+  # Profil "eureka" : il ne demarre PAS avec un simple "docker compose up -d".
+  #     docker compose --profile eureka up -d --build eureka
+  # Image construite ici avec le Dockerfile commun des services Spring.
+  # Les services lances avec ./mvnw s'y inscrivent avec :
+  #     EUREKA_ENABLED=true  EUREKA_URL=http://localhost:8761/eureka
+  # (exemple complet : services/eureka-server/README.md)
+  # ---------------------------------------------------------------------------
+  eureka:
+    profiles: [eureka]
+    build:
+      context: ../services/eureka-server
+      dockerfile: ../../deploy/docker/spring-service.Dockerfile
+    image: aquaops/eureka-server:dev
+    container_name: aquaops-eureka
+    environment:
+      HEALTHCHECK_PORT: "8761"     # lu par le HEALTHCHECK de l'image
+    # 127.0.0.1 seulement : le registre n'a pas d'authentification, il ne doit
+    # pas etre joignable depuis le reseau.
+    ports:
+      - "127.0.0.1:8761:8761"
+    mem_limit: 512m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
 # Declaration des volumes nommes utilises plus haut.

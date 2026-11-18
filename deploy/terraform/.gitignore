@@ -1,0 +1,19 @@
+# Terraform working files: never committed.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# Local variable files may hold secrets: only envs/*.tfvars (no secret) are versioned.
+*.auto.tfvars
+*.auto.tfvars.json
+secrets*.tfvars
+*.env
+# .terraform.lock.hcl IS versioned (provider checksums).

@@ -7,9 +7,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -21,25 +22,25 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class SimulatorPublisher {
 
-    private static final String TOPIC = "sensor-readings";
     private static final String EVENT_VERSION = "1";
+    private static final Logger LOG = LoggerFactory.getLogger(SimulatorPublisher.class);
     private static final Map<ReadingType, String> UNITES = Map.of(
             ReadingType.PRESSURE, "bar",
             ReadingType.FLOW, "m3/h",
             ReadingType.LEVEL, "m");
 
-    private final KafkaTemplate<String, String> kafka;
+    private final TelemetryIngestClient telemetry;
     private final ScenarioRegistry scenarios;
     private final Clock clock;
     private final JsonMapper json = JsonMapper.builder().build();
     private final List<Sensor> capteurs;
     private volatile boolean pause;
 
-    public SimulatorPublisher(KafkaTemplate<String, String> kafka,
+    public SimulatorPublisher(TelemetryIngestClient telemetry,
                               ScenarioRegistry scenarios,
                               Clock clock,
                               @Value("${simulator.sensors-file}") Resource fichier) throws Exception {
-        this.kafka = kafka;
+        this.telemetry = telemetry;
         this.scenarios = scenarios;
         this.clock = clock;
         try (InputStream in = fichier.getInputStream()) {
@@ -57,8 +58,16 @@ public class SimulatorPublisher {
             if (!mesure.emit()) {
                 continue; // capteur silencieux : on n'envoie rien
             }
-            kafka.send(TOPIC, String.valueOf(s.sensorId()), enJson(s, mesure));
+            envoyer(s, mesure).whenComplete((ignored, error) -> {
+                if (error != null) {
+                    LOG.warn("Echec d’envoi de mesure pour sensorId={}", s.sensorId(), error);
+                }
+            });
         }
+    }
+
+    java.util.concurrent.CompletableFuture<Void> envoyer(Sensor sensor, Sample measure) {
+        return telemetry.publish(enJson(sensor, measure));
     }
 
     void setPause(boolean pause) {

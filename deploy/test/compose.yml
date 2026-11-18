@@ -70,8 +70,15 @@ services:
     <<: *java-service
     image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/detection:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
     environment:
+      <<: *db-credentials
       HEALTHCHECK_PORT: "8083"
+      # Since PR #116: anomalies stored in PostgreSQL (database aquaops_detection,
+      # created by the postgres-databases service of compose.infra.yml, or by
+      # the administrator when PostgreSQL runs elsewhere) and an API secured by
+      # Keycloak tokens (same issuer as assets).
+      DETECTION_DB_URL: jdbc:postgresql://${DB_HOST:?DB_HOST is required}:${DB_PORT:-5432}/aquaops_detection
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:?KEYCLOAK_ISSUER_URI is required}
 
   incidents:
     <<: *java-service
@@ -98,9 +105,11 @@ services:
     image: ${IMAGE_NAMESPACE:-ghcr.io/fatii-elb/aquaops}/simulator:${IMAGE_TAG:?IMAGE_TAG is required, the commit SHA to deploy}
     environment:
       HEALTHCHECK_PORT: "8086"
-      # The simulator publishes sensor-readings: without this it would try
-      # localhost:9092, i.e. its own container.
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}
+      GATEWAY_URL: http://gateway:8080
+      SIMULATOR_API_KEY: ${SIMULATOR_API_KEY:?SIMULATOR_API_KEY is required, see deploy/test/.env.example}
+    depends_on:
+      gateway: { condition: service_healthy }
+      telemetry: { condition: service_healthy }
 
   gateway:
     <<: *java-service
@@ -118,6 +127,8 @@ services:
       INCIDENTS_URL: http://incidents:8084
       NOTIFICATIONS_URL: http://notifications:8085
       SIMULATOR_URL: http://simulator:8086
+      SIMULATOR_API_KEY: ${SIMULATOR_API_KEY:?SIMULATOR_API_KEY is required, see deploy/test/.env.example}
+      TELEMETRY_INGEST_RATE_LIMIT: ${TELEMETRY_INGEST_RATE_LIMIT:-500}
       # application.yml also exposes /actuator/gateway (the route list). The
       # gateway is the published service: expose health only.
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health

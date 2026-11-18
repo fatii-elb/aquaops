@@ -25,6 +25,7 @@ aquaops/
 ├── contracts/events/     the 3 Kafka event contracts (SCRUM-60)
 ├── services/             one folder per backend service
 │   ├── gateway/                 E5
+│   ├── eureka-server/           E5
 │   ├── telemetry-service/       E1
 │   ├── simulator/               E1
 │   ├── assets-service/          E2
@@ -59,6 +60,7 @@ Service folder names: lowercase, hyphens, ending in `-service`
 | Notifications | 8085 |
 | Simulator | 8086 |
 | Keycloak | **8180** (its default 8080 clashes with the gateway) |
+| Eureka server | 8761 |
 | PostgreSQL | 5432 |
 | Kafka | 9092 |
 | Angular dev server | 4200 |
@@ -129,7 +131,11 @@ Full Definition of Done: see `docs/definition-of-done.md` (TECH-7, E3).
 
 ## 8. Open questions for sprint planning
 
-1. Does the simulator send readings to Telemetry over HTTP (through the gateway)
-   or directly into Kafka? Affects the gateway and NFR-18.
+1. **SCRUM-65 implementation choice (E1; validate with E5 before merge):** the
+   simulator sends readings over HTTP through the gateway; the gateway
+   authenticates the `X-API-Key` and applies an in-memory Bucket4j limit of
+   500 requests/s per gateway instance. The shared key and limit are
+   environment-configurable. The limit is not distributed across multiple
+   gateway replicas and must be revisited before scaling.
 2. Node.js, PostgreSQL, Kafka and Keycloak versions (E1, E2, E4 to confirm).
 3. How is an incident's priority calculated (low, medium, high, critical)?

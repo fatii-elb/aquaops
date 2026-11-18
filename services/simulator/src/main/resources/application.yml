@@ -1,17 +1,24 @@
 server:
   port: ${SIMULATOR_PORT:8086}
+  # Arret gracieux : les requetes en cours se terminent avant l'arret du pod (NFR-05, NFR-07).
+  shutdown: graceful
 spring:
   application:
     name: simulator
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
 simulator:
   sensors-file: ${SENSORS_FILE:classpath:sensors.json}
+  gateway-url: ${GATEWAY_URL:http://localhost:8080}
+  api-key: ${SIMULATOR_API_KEY:local-dev-only}
   interval-ms: ${SIM_INTERVAL_MS:1000}
+  request-timeout: ${SIMULATOR_REQUEST_TIMEOUT:5s}
 management:
+  endpoint:
+    health:
+      # /actuator/health/liveness et /actuator/health/readiness : sondes Kubernetes (NFR-05).
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:

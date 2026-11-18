@@ -1,0 +1,60 @@
+openapi: 3.0.3
+info:
+  title: AquaOps - detection-service
+  version: 0.1.0
+  description: >
+    Consultation des anomalies detectees (BE-1). Brouillon E3, a relire par l'equipe.
+    Acces : jeton Keycloak, lecture seule, roles operateur, superviseur, technicien, administrateur.
+    Via la passerelle : /api/detection/**.
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/detection/anomalies:
+    get:
+      summary: Liste paginee des anomalies
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: zoneId, in: query, schema: { type: integer }, description: Zone concernee }
+        - { name: type, in: query, schema: { type: string, enum: [LEAK_SUSPECTED, SENSOR_SILENT, PUMP_FAULT, LOW_LEVEL] } }
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, RESOLVED] }, description: Insensible a la casse }
+        - { name: from, in: query, schema: { type: string, format: date-time }, description: Date de detection minimale (incluse) }
+        - { name: to, in: query, schema: { type: string, format: date-time }, description: Date de detection maximale (incluse) }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 20 } }
+        - name: sort
+          in: query
+          schema: { type: string, default: "detectedAt,desc" }
+          description: "champ,asc|desc avec champ parmi detectedAt, zoneId, type, status"
+      responses:
+        "200":
+          description: Une page d'anomalies
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnomalyPage" }
+        "400": { description: Parametre invalide (status, page, size, sort, from apres to) }
+        "401": { description: Jeton absent ou invalide }
+        "403": { description: Role non autorise }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Anomaly:
+      type: object
+      properties:
+        id: { type: string, description: "Identifiant de l'evenement anomaly-detected (UUID)" }
+        type: { type: string, enum: [LEAK_SUSPECTED, SENSOR_SILENT, PUMP_FAULT, LOW_LEVEL] }
+        zoneId: { type: integer }
+        sensorId: { type: integer, nullable: true }
+        severity: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL], description: "Deduite du type (LEAK=CRITICAL, PUMP_FAULT=HIGH, SENSOR_SILENT=MEDIUM, LOW_LEVEL=LOW)" }
+        status: { type: string, enum: [OPEN, RESOLVED] }
+        measuredAt: { type: string, format: date-time, nullable: true }
+        detectedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+    AnomalyPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: "#/components/schemas/Anomaly" } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }

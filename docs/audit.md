@@ -37,4 +37,7 @@ L'auteur et son rôle sont lus dans le jeton. Pour un autre service, il n'y a ri
 ## À savoir
 
 - `notifications-service` a sa propre table `AuditLog` (qui, quand, quoi) alimentée par le même topic. Les deux ne se gênent pas (groupes de consommateurs différents), mais **l'écran d'audit lit uniquement celle d'assets-service**. À décider avec E6 : garder ou retirer l'ancienne.
-- La connexion des utilisateurs (Keycloak) n'est pas tracée : reportée au Sprint 5.
+- **Connexions (FR-24, reste de SCRUM-46)** : `KeycloakLoginAuditPoller` copie les événements `LOGIN`, `LOGIN_ERROR` et `LOGOUT` de Keycloak
+  dans `audit_log` (`source` = `keycloak`), toutes les 30 s, avec le compte de service `aquaops-audit` (rôle `view-events` seulement).
+  Désactivé par défaut : `AUDIT_KEYCLOAK_ENABLED=true`, `KEYCLOAK_BASE_URL` et `KEYCLOAK_AUDIT_CLIENT_SECRET` (voir `docs/keycloak/README.md`).
+  Contrôle : `GET /api/assets/audit?action=LOGIN` (jeton superviseur ou administrateur).

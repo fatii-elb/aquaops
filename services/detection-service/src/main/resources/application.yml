@@ -1,10 +1,27 @@
 
 server:
   port: ${DETECTION_PORT:8083}
+  # Arret gracieux : les requetes en cours se terminent avant l'arret du pod (NFR-05, NFR-07).
+  shutdown: graceful
 
 spring:
   application:
     name: detection-service
+  datasource:
+    url: ${DETECTION_DB_URL:jdbc:postgresql://localhost:5432/aquaops_detection}
+    username: ${DB_USER:aquaops}
+    password: ${DB_PASSWORD:aquaops}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/aquaops}
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -31,6 +48,11 @@ detection:
   check-interval-ms: ${SILENCE_CHECK_INTERVAL_MS:1000}
   
 management:
+  endpoint:
+    health:
+      # /actuator/health/liveness et /actuator/health/readiness : sondes Kubernetes (NFR-05).
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:

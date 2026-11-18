@@ -1,0 +1,12 @@
+<app-shell [title]="title" [active]="active">
+  <div class="flex flex-1 items-center justify-center p-space-xl lg:p-space-2xl">
+    <section class="flex w-full max-w-xl flex-col items-center gap-space-md rounded-xl bg-surface-container-lowest p-space-2xl text-center shadow-sm" data-testid="coming-soon">
+      <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-fixed text-primary">
+        <span class="material-symbols-outlined text-[32px]">{{ icon }}</span>
+      </span>
+      <span class="rounded-full bg-secondary-container px-space-sm py-space-2xs font-label-sm text-label-sm font-bold uppercase tracking-wider text-on-secondary-container">Bientôt disponible</span>
+      <h1 class="font-display-md text-display-md tracking-tight text-on-surface">{{ title }}</h1>
+      <p class="font-body-md text-body-md text-on-surface-variant">{{ description }}</p>
+    </section>
+  </div>
+</app-shell>

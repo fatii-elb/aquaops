@@ -1,0 +1,276 @@
+<app-shell title="Réseau &amp; Actifs" active="assets">
+  <div class="flex flex-col gap-space-xl p-space-xl lg:p-space-2xl">
+
+    <!-- En-tête -->
+    <section class="flex flex-col justify-between gap-space-lg rounded-xl bg-surface-container-lowest p-space-xl shadow-sm lg:flex-row lg:items-center">
+      <div class="flex min-w-0 flex-col gap-space-2xs">
+        <span class="flex w-fit items-center gap-space-2xs rounded-full bg-primary-fixed px-space-sm py-space-2xs font-label-sm text-label-sm font-bold uppercase tracking-wider text-on-primary-fixed-variant">
+          <span class="material-symbols-outlined text-[14px]">hub</span>
+          Infrastructure hydraulique
+        </span>
+        <h1 class="font-display-md text-display-md tracking-tight text-on-surface">Réseau &amp; Actifs</h1>
+        <p class="max-w-3xl font-body-md text-body-md text-on-surface-variant">
+          Gérez les zones, conduites, réservoirs, pompes et capteurs qui composent le réseau de distribution d'eau potable.
+        </p>
+      </div>
+      <div class="flex shrink-0 flex-wrap items-center gap-space-sm">
+        <button type="button" data-testid="refresh" (click)="store.load()" [disabled]="store.loading()"
+          class="flex items-center gap-space-xs rounded-lg bg-surface-container-low px-space-md py-space-sm font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container disabled:opacity-60">
+          <span class="material-symbols-outlined text-[18px] {{ store.loading() ? 'animate-spin' : '' }}">refresh</span>
+          Actualiser
+        </button>
+        @if (canWrite) {
+          <button type="button" data-testid="add-asset" (click)="openCreate()" [disabled]="!store.loaded()"
+            class="flex items-center gap-space-xs rounded-lg bg-linear-to-r from-primary to-primary-container px-space-lg py-space-sm font-label-md text-label-md text-on-primary shadow-sm transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60">
+            <span class="material-symbols-outlined text-[18px]">add</span>
+            Ajouter un actif
+          </button>
+        }
+      </div>
+    </section>
+
+    <!-- Erreur de chargement -->
+    @if (store.error(); as message) {
+      <div role="alert" data-testid="load-error"
+        class="flex items-center justify-between gap-space-md rounded-xl bg-error-container px-space-xl py-space-md text-on-error-container">
+        <div class="flex items-center gap-space-sm">
+          <span class="material-symbols-outlined text-[20px]">error</span>
+          <p class="font-body-md text-body-md">{{ message }}</p>
+        </div>
+        <button type="button" (click)="store.load()"
+          class="rounded-lg bg-surface-container-lowest px-space-md py-space-xs font-label-md text-label-md text-error shadow-sm">Réessayer</button>
+      </div>
+    }
+
+    <!-- Cartes KPI : chaque valeur est calculée depuis les listes de l'API -->
+    <section class="grid grid-cols-2 gap-space-lg md:grid-cols-3 xl:grid-cols-5" aria-label="Indicateurs du réseau">
+      @for (kpi of categories; track kpi.key) {
+        <button type="button" [attr.data-kpi]="kpi.key" (click)="selectCategory(kpi.key)" [attr.aria-pressed]="kpi.key === category()"
+          class="flex flex-col gap-space-sm rounded-xl p-space-xl text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md {{ kpi.key === category() ? 'bg-primary-fixed ring-1 ring-primary' : 'bg-surface-container-lowest' }}">
+          <div class="flex w-full items-center justify-between">
+            <span class="font-label-sm text-label-sm font-bold uppercase tracking-widest text-secondary">{{ kpi.label }}</span>
+            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-fixed text-primary">
+              <span class="material-symbols-outlined text-[20px]">{{ kpi.icon }}</span>
+            </span>
+          </div>
+          @if (store.loaded()) {
+            <span class="font-metric-value text-metric-value text-on-surface" [attr.data-testid]="'kpi-' + kpi.key">{{ store.counts()[kpi.key] }}</span>
+          } @else {
+            <span class="h-[30px] w-12 animate-pulse rounded-md bg-surface-container-high" aria-hidden="true"></span>
+          }
+        </button>
+      }
+    </section>
+
+    <!-- Répartition des actifs -->
+    @if (store.loaded() && store.total() > 0) {
+      <section class="grid grid-cols-1 gap-space-lg lg:grid-cols-3" aria-label="Répartition des actifs" data-testid="distribution">
+        <div class="flex flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-sm lg:col-span-2">
+          <div class="flex items-baseline justify-between">
+            <h2 class="font-headline-md text-headline-md text-on-surface">Répartition par catégorie</h2>
+            <span class="font-label-md text-label-md text-secondary">{{ store.total() }} actifs</span>
+          </div>
+          <div class="flex h-3 w-full overflow-hidden rounded-full bg-surface-container">
+            @for (seg of distribution(); track seg.key) {
+              <div class="{{ seg.color }} h-full transition-all duration-500" [style.width.%]="seg.pct" [attr.title]="seg.label + ' : ' + seg.count"></div>
+            }
+          </div>
+          <ul class="flex flex-wrap gap-x-space-xl gap-y-space-xs">
+            @for (seg of distribution(); track seg.key) {
+              <li class="flex items-center gap-space-xs font-label-md text-label-md text-on-surface-variant">
+                <span class="{{ seg.color }} h-2.5 w-2.5 rounded-full"></span>
+                {{ seg.label }} <span class="font-semibold text-on-surface">{{ seg.count }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+        <div class="flex flex-col gap-space-md rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+          <h2 class="font-headline-md text-headline-md text-on-surface">Réseau</h2>
+          <dl class="grid grid-cols-2 gap-space-md">
+            <div class="flex flex-col gap-space-2xs">
+              <dt class="font-label-sm text-label-sm text-secondary">Linéaire de conduites</dt>
+              <dd class="font-label-md text-label-md font-semibold text-on-surface" data-testid="total-length">{{ store.totals().pipeLengthM.toLocaleString('fr-FR') }} m</dd>
+            </div>
+            <div class="flex flex-col gap-space-2xs">
+              <dt class="font-label-sm text-label-sm text-secondary">Capacité de stockage</dt>
+              <dd class="font-label-md text-label-md font-semibold text-on-surface" data-testid="total-capacity">{{ store.totals().tankCapacityM3.toLocaleString('fr-FR') }} m³</dd>
+            </div>
+          </dl>
+          <div class="flex flex-wrap gap-space-xs">
+            @for (t of sensorTypes; track t) {
+              <span class="rounded-full bg-surface-container-low px-space-sm py-space-2xs font-label-sm text-label-sm text-on-surface-variant">
+                {{ sensorTypeLabels[t] }} <span class="font-bold text-on-surface">{{ store.sensorTypes()[t] }}</span>
+              </span>
+            }
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- Gestion par catégorie -->
+    <section class="flex flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
+      <div class="flex flex-col gap-space-md px-space-xl pt-space-xl">
+        <div role="tablist" aria-label="Catégories d'actifs" class="flex flex-wrap gap-space-xs">
+          @for (c of categories; track c.key) {
+            <button type="button" role="tab" [attr.data-tab]="c.key" [attr.aria-selected]="c.key === category()" (click)="selectCategory(c.key)"
+              class="flex items-center gap-space-xs rounded-lg px-space-md py-space-sm font-label-md text-label-md transition-colors {{ c.key === category() ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container' }}">
+              <span class="material-symbols-outlined text-[18px]">{{ c.icon }}</span>
+              {{ c.label }}
+              @if (store.loaded()) {
+                <span class="rounded-full px-space-xs font-label-sm text-label-sm {{ c.key === category() ? 'bg-on-primary/20' : 'bg-surface-container-high' }}">{{ store.counts()[c.key] }}</span>
+              }
+            </button>
+          }
+        </div>
+
+        <!-- Recherche et filtres combinables -->
+        <div class="flex flex-wrap items-center gap-space-sm">
+          <label class="relative min-w-56 flex-1">
+            <span class="material-symbols-outlined pointer-events-none absolute left-space-md top-1/2 -translate-y-1/2 text-[18px] text-secondary">search</span>
+            <input type="search" data-testid="search" [value]="filters().query" (input)="setQuery($any($event.target).value)"
+              placeholder="Rechercher par nom, zone, type…" aria-label="Rechercher un actif"
+              class="w-full rounded-lg bg-surface-container-low py-space-sm pl-10 pr-space-md font-body-md text-body-md text-on-surface outline-none placeholder:text-secondary/70 focus:ring-1 focus:ring-primary" />
+          </label>
+          @if (category() !== 'zones') {
+            <select data-testid="filter-zone" aria-label="Filtrer par zone" (change)="setZone($any($event.target).value)"
+              class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+              <option value="" [selected]="filters().zoneId === null">Toutes les zones</option>
+              @for (z of store.snapshot().zones; track z.id) {
+                <option [value]="z.id" [selected]="filters().zoneId === z.id">{{ z.name }}</option>
+              }
+            </select>
+          }
+          @if (category() === 'sensors') {
+            <select data-testid="filter-sensor-type" aria-label="Filtrer par type de mesure" (change)="setSensorType($any($event.target).value)"
+              class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+              <option value="" [selected]="filters().sensorType === null">Tous les types</option>
+              @for (t of sensorTypes; track t) {
+                <option [value]="t" [selected]="filters().sensorType === t">{{ sensorTypeLabels[t] }}</option>
+              }
+            </select>
+            <select data-testid="filter-asset-kind" aria-label="Filtrer par type d'actif rattaché" (change)="setAssetKind($any($event.target).value)"
+              class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+              <option value="" [selected]="filters().assetKind === null">Tous les actifs</option>
+              @for (k of assetKinds; track k) {
+                <option [value]="k" [selected]="filters().assetKind === k">{{ assetKindLabels[k] }}</option>
+              }
+            </select>
+          }
+          @if (filtersActive()) {
+            <button type="button" data-testid="reset-filters" (click)="resetFilters()"
+              class="flex items-center gap-space-xs rounded-lg px-space-md py-space-sm font-label-md text-label-md text-primary transition-colors hover:bg-primary-fixed">
+              <span class="material-symbols-outlined text-[18px]">filter_alt_off</span>Réinitialiser
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="mt-space-lg">
+        @if (!store.loaded()) {
+          @if (store.loading()) {
+            <div class="flex flex-col gap-space-sm px-space-xl pb-space-xl" data-testid="table-loading" aria-busy="true">
+              @for (n of [1, 2, 3, 4, 5]; track n) {
+                <div class="h-11 animate-pulse rounded-lg bg-surface-container-low"></div>
+              }
+            </div>
+          } @else {
+            <p class="px-space-xl pb-space-xl font-body-md text-body-md text-on-surface-variant">Les données n'ont pas pu être chargées.</p>
+          }
+        } @else if (inCategory() === 0) {
+          <div class="flex flex-col items-center gap-space-sm px-space-xl pb-space-2xl pt-space-xl text-center" data-testid="empty-state">
+            <span class="flex h-14 w-14 items-center justify-center rounded-full bg-primary-fixed text-primary">
+              <span class="material-symbols-outlined text-[28px]">{{ meta().icon }}</span>
+            </span>
+            <h2 class="font-headline-md text-headline-md text-on-surface">Aucun(e) {{ meta().singular }} enregistré(e)</h2>
+            <p class="max-w-md font-body-md text-body-md text-on-surface-variant">
+              @if (canWrite) {
+                Ajoutez {{ meta().feminine ? 'la première' : 'le premier' }} {{ meta().singular }} pour commencer à décrire le réseau.
+              } @else {
+                Aucun élément de cette catégorie n'a encore été créé.
+              }
+            </p>
+            @if (canWrite) {
+              <button type="button" data-testid="empty-add" (click)="openCreate()"
+                class="mt-space-xs flex items-center gap-space-xs rounded-lg bg-linear-to-r from-primary to-primary-container px-space-lg py-space-sm font-label-md text-label-md text-on-primary shadow-sm">
+                <span class="material-symbols-outlined text-[18px]">add</span>Ajouter
+              </button>
+            }
+          </div>
+        } @else if (page().total === 0) {
+          <div class="flex flex-col items-center gap-space-sm px-space-xl pb-space-2xl pt-space-xl text-center" data-testid="no-results">
+            <span class="material-symbols-outlined text-[32px] text-secondary">search_off</span>
+            <h2 class="font-headline-md text-headline-md text-on-surface">Aucun résultat</h2>
+            <p class="font-body-md text-body-md text-on-surface-variant">Aucun élément ne correspond à la recherche ou aux filtres.</p>
+            <button type="button" (click)="resetFilters()" class="font-label-md text-label-md text-primary hover:underline">Réinitialiser les filtres</button>
+          </div>
+        } @else {
+          <app-asset-table [rows]="page().items" [category]="category()" [sort]="sort()" [canWrite]="canWrite"
+            (sortChange)="toggleSort($event)" (view)="viewRow($event)"
+            (edit)="openEdit($event.category, $event.id)" (remove)="askDelete($event)" />
+
+          <div class="flex flex-wrap items-center justify-between gap-space-md border-t border-outline-variant/30 px-space-xl py-space-md">
+            <p class="font-label-md text-label-md text-on-surface-variant" data-testid="page-info" aria-live="polite">
+              {{ page().from }}–{{ page().to }} sur {{ page().total }}
+            </p>
+            <div class="flex items-center gap-space-sm">
+              <label class="flex items-center gap-space-xs font-label-sm text-label-sm text-secondary">
+                Lignes
+                <select aria-label="Lignes par page" (change)="setPageSize($any($event.target).value)"
+                  class="rounded-lg bg-surface-container-low px-space-sm py-space-2xs font-label-md text-label-md text-on-surface outline-none focus:ring-1 focus:ring-primary">
+                  @for (n of pageSizes; track n) {
+                    <option [value]="n" [selected]="n === pageSize()">{{ n }}</option>
+                  }
+                </select>
+              </label>
+              <button type="button" data-testid="page-prev" aria-label="Page précédente" [disabled]="page().page <= 1" (click)="setPage(page().page - 1)"
+                class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high disabled:opacity-40">
+                <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+              </button>
+              <span class="font-label-md text-label-md text-on-surface">Page {{ page().page }} / {{ page().pageCount }}</span>
+              <button type="button" data-testid="page-next" aria-label="Page suivante" [disabled]="page().page >= page().pageCount" (click)="setPage(page().page + 1)"
+                class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high disabled:opacity-40">
+                <span class="material-symbols-outlined text-[20px]">chevron_right</span>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  </div>
+
+</app-shell>
+
+<!-- Fiche détaillée -->
+@if (detailVisible()) {
+  @if (selected(); as sel) {
+    <app-asset-detail [category]="sel.category" [id]="sel.id" [snapshot]="store.snapshot()" [canWrite]="canWrite"
+      (closed)="closeDetail()" (edit)="openEdit(sel.category, sel.id)" (remove)="askDelete(sel)" (openRef)="view($event)" />
+  }
+}
+
+<!-- Formulaire de création ou de modification -->
+@if (canWrite) {
+  @if (formState(); as fs) {
+    <app-asset-form [initialCategory]="fs.category" [item]="fs.item" [snapshot]="store.snapshot()"
+      [saving]="store.saving()" [error]="store.mutationError()"
+      (submitted)="onSave($event)" (cancelled)="closeForm()" />
+  }
+  @if (deleteTarget(); as target) {
+    <app-delete-dialog [target]="target" [busy]="store.saving()" [error]="store.mutationError()?.message ?? null"
+      (confirmed)="confirmDelete()" (cancelled)="cancelDelete()" (openRef)="openFromDialog($event)" />
+  }
+}
+
+<!-- Notification de succès ou d'échec -->
+@if (toast(); as t) {
+  <div class="pointer-events-none fixed bottom-space-xl left-1/2 z-[70] -translate-x-1/2 px-space-md">
+    <div role="status" aria-live="polite" data-testid="toast"
+      class="pointer-events-auto flex items-center gap-space-sm rounded-xl px-space-lg py-space-md shadow-xl {{ t.kind === 'success' ? 'bg-inverse-surface text-inverse-on-surface' : 'bg-error-container text-on-error-container' }}">
+      <span class="material-symbols-outlined text-[20px] {{ t.kind === 'success' ? 'text-tertiary-fixed-dim' : '' }}">{{ t.kind === 'success' ? 'check_circle' : 'error' }}</span>
+      <p class="font-label-md text-label-md">{{ t.text }}</p>
+      <button type="button" (click)="dismissToast()" aria-label="Fermer la notification" class="rounded p-space-2xs opacity-70 hover:opacity-100">
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+  </div>
+}

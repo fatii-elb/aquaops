@@ -16,7 +16,7 @@ Un scénario par ligne : procédure, jeu de données, résultat attendu. La colo
 | RC-06 | NFR-07 | Mise à jour d'un service (nouvelle image) sous trafic continu | Trafic constant sur l'API | 0 erreur 5xx pendant toute la mise à jour | E3 | |
 | RC-07 | FR-23 | Contrôle d'accès par rôle : chaque rôle tente chaque écran et chaque action (voir matrice ci-dessous) | 4 utilisateurs de test | Accès autorisés acceptés, autres refusés (403 ou écran « Accès refusé ») | E2 | Réussi le 14 nov. 2026. Écrans : 4 rôles testés sur /dashboard, /audit et /administration, conformes à la matrice. API (jeton opérateur) : GET /api/assets/audit 403, POST /api/assets/assets 403. Réserve : API testée avec le rôle opérateur seulement. |
 | RC-08 | NFR-15, NFR-16 | Commit avec un faux secret, puis avec une dépendance vulnérable | Branche de test | Pipeline bloqué (Gitleaks, Trivy, Semgrep, SCA), puis accepté après correction | E3, E4 | |
-| RC-09 | NFR-18 | Dépassement de débit sur la passerelle ; mesure non authentifiée | Script de requêtes | Réponse 429 au-delà du seuil ; mesure non authentifiée rejetée et journalisée | E1 | |
+| RC-09 | NFR-18 | Envoyer une mesure valide en `POST /api/telemetry/readings` sans `X-API-Key`, puis dépasser `TELEMETRY_INGEST_RATE_LIMIT` (500 req/s par défaut) avec la clé configurée | Simulateur ou script de requêtes vers la passerelle | Sans clé : `401`, rejet journalisé sans exposer la clé ; au-delà du seuil : `429` | E1 | |
 | RC-10 | NFR-11 | Scénario de fuite complet observé dans Jaeger | Simulateur | Une trace unique passerelle, télémétrie, détection, incidents | E4 | |
 | RC-11 | NFR-09 | `terraform destroy` puis `terraform apply` + pipeline | VM | Environnement reconstruit sans action manuelle | E5 | |
 

@@ -4,6 +4,11 @@ import { loadAppConfig } from './app-config';
 const DEFAUTS = {
   issuer: 'http://localhost:8180/realms/aquaops',
   clientId: 'aquaops-frontend',
+  assetsBaseUrl: '/api/assets',
+  telemetryBaseUrl: '/api/telemetry',
+  sensorDataMode: 'mock',
+  sensorSilenceThresholdSeconds: 10,
+  sensorLookbackSeconds: 120,
 };
 
 describe('loadAppConfig', () => {
@@ -14,13 +19,24 @@ describe('loadAppConfig', () => {
   it('retourne les valeurs de config.json quand la réponse est valide', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ issuer: 'https://kc.exemple/realms/aquaops', clientId: 'autre-client' }),
+      json: async () => ({
+        issuer: 'https://kc.exemple/realms/aquaops',
+        clientId: 'autre-client',
+        sensorDataMode: 'api',
+        sensorSilenceThresholdSeconds: '15',
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
     const cfg = await loadAppConfig();
 
-    expect(cfg).toEqual({ issuer: 'https://kc.exemple/realms/aquaops', clientId: 'autre-client' });
+    expect(cfg).toEqual({
+      ...DEFAUTS,
+      issuer: 'https://kc.exemple/realms/aquaops',
+      clientId: 'autre-client',
+      sensorDataMode: 'api',
+      sensorSilenceThresholdSeconds: 15,
+    });
     expect(fetchMock).toHaveBeenCalledWith('/config.json', { cache: 'no-store' });
   });
 
@@ -34,6 +50,19 @@ describe('loadAppConfig', () => {
 
     expect(cfg.issuer).toBe('https://kc.exemple/realms/aquaops');
     expect(cfg.clientId).toBe(DEFAUTS.clientId);
+    expect(cfg.assetsBaseUrl).toBe(DEFAUTS.assetsBaseUrl);
+  });
+
+  it('utilise les valeurs par défaut pour un seuil invalide', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ sensorSilenceThresholdSeconds: -2, sensorLookbackSeconds: 'invalide' }),
+    }));
+
+    const cfg = await loadAppConfig();
+
+    expect(cfg.sensorSilenceThresholdSeconds).toBe(10);
+    expect(cfg.sensorLookbackSeconds).toBe(120);
   });
 
   it('retourne les valeurs par défaut si fetch échoue', async () => {

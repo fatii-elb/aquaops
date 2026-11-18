@@ -1,3 +1,6 @@
+import { EVENT_SOURCE_FACTORY } from '../../core/notification-stream';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -47,7 +50,10 @@ async function render(source: StubSource) {
     providers: [
       provideRouter([]),
       { provide: AuditDataSource, useValue: source },
-      { provide: AuthService, useValue: { username: 'sup', logout: () => undefined } },
+      provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: { username: 'sup', hasAnyRole: () => true, logout: () => undefined } },
+        { provide: EVENT_SOURCE_FACTORY, useValue: () => ({ onopen: null, onerror: null, onmessage: null, close() {} }) },
     ],
   });
   const fixture = TestBed.createComponent(Audit);

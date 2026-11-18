@@ -1,0 +1,243 @@
+<app-shell title="Rapports & Analyses" active="reports">
+  <div class="flex flex-col gap-space-xl p-space-xl lg:p-space-2xl">
+
+    <!-- ===== En-tête ===== -->
+    <section class="flex flex-col justify-between gap-space-lg rounded-xl bg-surface-container-lowest p-space-xl shadow-sm lg:flex-row lg:items-center">
+      <div class="flex min-w-0 flex-col gap-space-2xs">
+        <h1 class="font-display-md text-display-md tracking-tight text-on-surface">Rapports &amp; Analyses</h1>
+        <p class="max-w-3xl font-body-md text-body-md text-on-surface-variant">
+          Activité du réseau : incidents, temps de résolution et interventions. Choisissez une période, puis exportez ou imprimez le rapport.
+        </p>
+        <p class="print-only font-label-md text-label-md text-on-surface-variant" data-testid="print-period">{{ periodLabel() }}</p>
+      </div>
+      <div class="no-print flex shrink-0 flex-wrap items-center gap-space-sm">
+        <button type="button" (click)="exportCsv()" [disabled]="report().length === 0" data-testid="export"
+          class="flex items-center gap-space-xs rounded-lg bg-primary px-space-md py-space-sm font-label-md text-label-md font-semibold text-on-primary transition-colors hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-40">
+          <span class="material-symbols-outlined text-[18px]">download</span>
+          Exporter en CSV
+        </button>
+        <button type="button" (click)="print()" data-testid="print"
+          class="flex items-center gap-space-xs rounded-lg bg-surface-container-high px-space-md py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest">
+          <span class="material-symbols-outlined text-[18px]">print</span>
+          Imprimer
+        </button>
+      </div>
+    </section>
+
+    <!-- ===== Période ===== -->
+    <form aria-label="Période" class="no-print grid grid-cols-1 items-end gap-space-md rounded-xl bg-surface-container-lowest p-space-lg shadow-sm md:grid-cols-4"
+      (submit)="$event.preventDefault()">
+      <label class="flex flex-col gap-1">
+        <span class="font-label-sm text-label-sm font-semibold text-secondary">Période</span>
+        <select name="preset" [value]="preset()" (change)="setPreset($any($event.target).value)" data-testid="filter-period"
+          class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary">
+          @for (p of presets; track p.value) {
+            <option [value]="p.value" [selected]="p.value === preset()">{{ p.label }}</option>
+          }
+        </select>
+      </label>
+      @if (preset() === 'custom') {
+        <label class="flex flex-col gap-1">
+          <span class="font-label-sm text-label-sm font-semibold text-secondary">Du</span>
+          <input type="date" name="from" [value]="customFrom()" (input)="setCustomFrom($any($event.target).value)" data-testid="filter-from"
+            class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary" />
+        </label>
+        <label class="flex flex-col gap-1">
+          <span class="font-label-sm text-label-sm font-semibold text-secondary">Au</span>
+          <input type="date" name="to" [value]="customTo()" (input)="setCustomTo($any($event.target).value)" data-testid="filter-to"
+            class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary" />
+        </label>
+      }
+      <p class="font-label-md text-label-md text-secondary md:col-span-1" data-testid="period-label">{{ periodLabel() }} (UTC)</p>
+    </form>
+
+    @if (rangeError()) {
+      <p role="alert" data-testid="range-error" class="rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">{{ rangeError() }}</p>
+    }
+    @if (error()) {
+      <p role="alert" data-testid="error" class="rounded-xl bg-error-container px-space-md py-space-sm font-label-md text-label-md text-on-error-container">{{ error() }}</p>
+    }
+
+    @if (loading()) {
+      <p data-testid="loading" class="font-body-md text-body-md text-secondary">Chargement des incidents…</p>
+    } @else if (!error()) {
+
+      <!-- ===== Indicateurs ===== -->
+      <section aria-label="Indicateurs" class="report-block grid grid-cols-1 gap-space-md sm:grid-cols-2 xl:grid-cols-4">
+        <div class="flex flex-col gap-space-2xs rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+          <span class="font-label-md text-label-md text-secondary">Incidents sur la période</span>
+          <span class="font-metric-value text-metric-value text-on-surface" data-testid="kpi-total">{{ indicators().total }}</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">dont <span data-testid="kpi-active">{{ indicators().active }}</span> encore actifs</span>
+        </div>
+        <div class="flex flex-col gap-space-2xs rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+          <span class="font-label-md text-label-md text-secondary">Résolus ou clos</span>
+          <span class="font-metric-value text-metric-value text-on-surface" data-testid="kpi-finished">{{ indicators().finished }}</span>
+        </div>
+        <div class="flex flex-col gap-space-2xs rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+          <span class="font-label-md text-label-md text-secondary">Temps moyen de résolution</span>
+          <span class="font-metric-value text-metric-value text-on-surface" data-testid="kpi-resolution">{{ duration(indicators().meanResolutionMs) }}</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">Calculé jusqu'à la dernière mise à jour de l'incident.</span>
+        </div>
+        <div class="flex flex-col gap-space-2xs rounded-xl bg-surface-container-lowest p-space-xl shadow-sm">
+          <span class="font-label-md text-label-md text-secondary">Interventions terminées</span>
+          <span class="font-metric-value text-metric-value text-on-surface" data-testid="kpi-interventions">{{ indicators().interventionsDone ?? '—' }}</span>
+          @if (indicators().interventionsDone === null) {
+            <span class="font-body-sm text-body-sm text-on-surface-variant">Service des interventions indisponible.</span>
+          }
+        </div>
+      </section>
+
+      @if (indicators().total === 0) {
+        <p data-testid="empty-period" class="rounded-xl bg-surface-container-lowest p-space-xl font-body-md text-body-md text-secondary shadow-sm">Aucun incident sur la période.</p>
+      } @else {
+        <!-- ===== Graphiques ===== -->
+        <section aria-label="Graphiques" class="report-block grid grid-cols-1 gap-space-md lg:grid-cols-3">
+          <div class="rounded-xl bg-surface-container-lowest p-space-xl shadow-sm" data-testid="chart-priority">
+            <h2 class="mb-space-md font-headline-md text-headline-md text-on-surface">Par priorité</h2>
+            <ul class="flex flex-col gap-space-sm">
+              @for (row of indicators().byPriority; track row.key) {
+                <li class="flex items-center gap-space-sm">
+                  <span class="w-20 shrink-0 font-label-md text-label-md text-on-surface-variant">{{ priorityLabel($any(row.key)) }}</span>
+                  <span class="h-3 flex-1 overflow-hidden rounded-full bg-surface-container-low"><span class="block h-full rounded-full bg-primary" [style.width.%]="row.percent"></span></span>
+                  <span class="w-8 shrink-0 text-right font-label-md text-label-md font-semibold text-on-surface" data-testid="bar-count">{{ row.count }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+          <div class="rounded-xl bg-surface-container-lowest p-space-xl shadow-sm" data-testid="chart-type">
+            <h2 class="mb-space-md font-headline-md text-headline-md text-on-surface">Par type</h2>
+            <ul class="flex flex-col gap-space-sm">
+              @for (row of indicators().byType; track row.key) {
+                <li class="flex items-center gap-space-sm">
+                  <span class="w-32 shrink-0 truncate font-label-md text-label-md text-on-surface-variant">{{ typeLabel(row.key) }}</span>
+                  <span class="h-3 flex-1 overflow-hidden rounded-full bg-surface-container-low"><span class="block h-full rounded-full bg-primary" [style.width.%]="row.percent"></span></span>
+                  <span class="w-8 shrink-0 text-right font-label-md text-label-md font-semibold text-on-surface" data-testid="bar-count">{{ row.count }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+          <div class="rounded-xl bg-surface-container-lowest p-space-xl shadow-sm" data-testid="chart-zone">
+            <h2 class="mb-space-md font-headline-md text-headline-md text-on-surface">Par zone</h2>
+            <ul class="flex flex-col gap-space-sm">
+              @for (row of indicators().byZone; track row.key) {
+                <li class="flex items-center gap-space-sm">
+                  <span class="w-32 shrink-0 truncate font-label-md text-label-md text-on-surface-variant">{{ zoneName(+row.key) }}</span>
+                  <span class="h-3 flex-1 overflow-hidden rounded-full bg-surface-container-low"><span class="block h-full rounded-full bg-primary" [style.width.%]="row.percent"></span></span>
+                  <span class="w-8 shrink-0 text-right font-label-md text-label-md font-semibold text-on-surface" data-testid="bar-count">{{ row.count }}</span>
+                </li>
+              }
+            </ul>
+          </div>
+        </section>
+
+        <section aria-label="Incidents par jour" class="report-block rounded-xl bg-surface-container-lowest p-space-xl shadow-sm" data-testid="chart-daily">
+          <h2 class="mb-space-sm font-headline-md text-headline-md text-on-surface">Incidents par jour</h2>
+          <svg [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight" role="img" class="h-40 w-full"
+            [attr.aria-label]="'Incidents créés par jour, maximum ' + chart().max + ' par jour'">
+            <line x1="16" [attr.x2]="chartWidth - 16" [attr.y1]="chartHeight - 12" [attr.y2]="chartHeight - 12" class="stroke-outline-variant" stroke-width="1" />
+            @if (chart().dots.length > 1) {
+              <polyline [attr.points]="chart().points" fill="none" class="stroke-primary" stroke-width="2" stroke-linejoin="round" />
+            }
+            @for (dot of chart().dots; track dot.day) {
+              <circle [attr.cx]="dot.x" [attr.cy]="dot.y" r="3" class="fill-primary"><title>{{ dot.day }} : {{ dot.count }}</title></circle>
+            }
+          </svg>
+          <p class="flex justify-between font-label-sm text-label-sm text-secondary">
+            <span>{{ chart().dots[0]?.day }}</span>
+            <span>max. {{ chart().max }} par jour</span>
+            <span>{{ chart().dots[chart().dots.length - 1]?.day }}</span>
+          </p>
+        </section>
+      }
+
+      <!-- ===== Rapport d'incidents ===== -->
+      <section aria-label="Rapport d'incidents" class="flex flex-col gap-space-md">
+        <h2 class="font-headline-md text-headline-md text-on-surface">Rapport d'incidents</h2>
+
+        <form aria-label="Filtres du rapport" (submit)="$event.preventDefault()"
+          class="no-print grid grid-cols-1 items-end gap-space-md rounded-xl bg-surface-container-lowest p-space-lg shadow-sm md:grid-cols-4">
+          <label class="flex flex-col gap-1">
+            <span class="font-label-sm text-label-sm font-semibold text-secondary">Priorité</span>
+            <select name="priority" [value]="priority()" (change)="setPriority($any($event.target).value)" data-testid="filter-priority"
+              class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary">
+              <option value="">Toutes</option>
+              @for (p of priorities; track p) {
+                <option [value]="p">{{ priorityLabel(p) }}</option>
+              }
+            </select>
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="font-label-sm text-label-sm font-semibold text-secondary">État</span>
+            <select name="status" [value]="status()" (change)="setStatus($any($event.target).value)" data-testid="filter-status"
+              class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary">
+              <option value="">Tous</option>
+              @for (s of statuses; track s) {
+                <option [value]="s">{{ statusLabel(s) }}</option>
+              }
+            </select>
+          </label>
+          <label class="flex flex-col gap-1">
+            <span class="font-label-sm text-label-sm font-semibold text-secondary">Zone</span>
+            <select name="zone" [value]="zoneId() ?? ''" (change)="setZone($any($event.target).value)" data-testid="filter-zone"
+              class="rounded-lg bg-surface-container-low px-space-md py-space-sm font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary">
+              <option value="">Toutes</option>
+              @for (z of zoneChoices(); track z.id) {
+                <option [value]="z.id">{{ z.name }}</option>
+              }
+            </select>
+          </label>
+          <button type="button" (click)="resetReportFilters()" data-testid="reset"
+            class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest">
+            Réinitialiser
+          </button>
+        </form>
+
+        <div class="overflow-x-auto rounded-xl bg-surface-container-lowest shadow-sm">
+          <table class="report-table w-full text-left">
+            <thead class="bg-surface-container-low">
+              <tr class="font-label-sm text-label-sm text-secondary">
+                <th scope="col" class="px-space-lg py-space-sm font-semibold">Code</th>
+                <th scope="col" class="px-space-lg py-space-sm font-semibold">Créé le</th>
+                <th scope="col" class="px-space-lg py-space-sm font-semibold">Zone</th>
+                <th scope="col" class="px-space-lg py-space-sm font-semibold">Type</th>
+                <th scope="col" class="px-space-lg py-space-sm font-semibold">Priorité</th>
+                <th scope="col" class="px-space-lg py-space-sm font-semibold">État</th>
+                <th scope="col" class="px-space-lg py-space-sm font-semibold">Responsable</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (i of rows(); track i.id) {
+                <tr class="border-t border-outline-variant/30 hover:bg-surface-container-low/50" data-testid="row">
+                  <td class="whitespace-nowrap px-space-lg py-space-sm font-mono-telemetry text-mono-telemetry text-on-surface">{{ code(i) }}</td>
+                  <td class="whitespace-nowrap px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant">{{ when(i.createdAt) }}</td>
+                  <td class="px-space-lg py-space-sm font-label-md text-label-md text-on-surface">{{ zoneName(i.zoneId) }}</td>
+                  <td class="px-space-lg py-space-sm font-label-md text-label-md text-on-surface">{{ typeLabel(i.type) }}</td>
+                  <td class="px-space-lg py-space-sm"><span class="rounded-full px-2 py-0.5 font-label-sm text-label-sm font-semibold {{ priorityClass(i.priority) }}">{{ priorityLabel(i.priority) }}</span></td>
+                  <td class="px-space-lg py-space-sm"><span class="rounded-full px-2 py-0.5 font-label-sm text-label-sm font-semibold {{ statusClass(i.status) }}">{{ statusLabel(i.status) }}</span></td>
+                  <td class="px-space-lg py-space-sm font-body-sm text-body-sm text-on-surface-variant">{{ i.assignee || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (report().length === 0) {
+            <p data-testid="empty" class="px-space-lg py-space-lg font-body-md text-body-md text-secondary">Aucun incident ne correspond à ces filtres.</p>
+          }
+        </div>
+
+        <nav aria-label="Pagination" class="no-print flex items-center justify-between">
+          <p class="font-label-md text-label-md text-secondary" data-testid="summary">
+            @if (report().length > 0) {
+              Page {{ page() + 1 }} sur {{ totalPages() }} · {{ report().length }} incident{{ report().length > 1 ? 's' : '' }}
+            }
+          </p>
+          <div class="flex gap-space-sm">
+            <button type="button" (click)="previous()" [disabled]="page() === 0" data-testid="previous"
+              class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest disabled:cursor-not-allowed disabled:opacity-40">Précédent</button>
+            <button type="button" (click)="next()" [disabled]="page() + 1 >= totalPages()" data-testid="next"
+              class="rounded-lg bg-surface-container-high px-space-lg py-space-sm font-label-md text-label-md font-semibold text-on-surface transition-colors hover:bg-surface-container-highest disabled:cursor-not-allowed disabled:opacity-40">Suivant</button>
+          </div>
+        </nav>
+      </section>
+    }
+  </div>
+</app-shell>
