@@ -107,13 +107,14 @@ eureka:
 | Docker Compose (réseau `backend`) | `true` | `http://eureka:8761/eureka` |
 | Kubernetes (SCRUM-56) | `true` | `http://eureka:8761/eureka` |
 
-**4. Vérifier** : le service apparaît dans http://localhost:8761, ou
+**4. Vérifier** : le service apparaît dans le registre :
 
 ```bash
-curl -s -H 'Accept: application/json' http://localhost:8761/eureka/apps/ASSETS-SERVICE
+curl -s -H 'Accept: application/json' http://localhost:8761/eureka/apps/TELEMETRY-SERVICE
+curl -s -H 'Accept: application/json' http://localhost:8761/eureka/apps/SIMULATOR
 ```
 
-(nom en majuscules ; `404` = pas inscrit).
+(noms en majuscules ; `404` = pas inscrit).
 
 ## Migration service par service (à faire par chaque responsable)
 
@@ -123,8 +124,8 @@ ne casse si un service migre plus tard que les autres.
 
 | Responsable | Service | `spring.application.name` (ne pas changer) | Port | Route gateway en mode Eureka | État |
 | --- | --- | --- | --- | --- | --- |
-| E1 | telemetry-service | `telemetry-service` | 8081 | `lb://telemetry-service` | à faire : étapes 1 à 3 |
-| E1 | simulator | `simulator` | 8086 | `lb://simulator` | à faire : étapes 1 à 3 |
+| E1 | telemetry-service | `telemetry-service` | 8081 | `lb://telemetry-service` | configuration présente ; inscription réelle à vérifier |
+| E1 | simulator | `simulator` | 8086 | `lb://simulator` | inscription vérifiée avec Eureka local ; routage gateway testé |
 | E2 | assets-service | `assets-service` | 8082 | `lb://assets-service` | **fait** (client présent, testé avec la gateway) |
 | E3 | detection-service | `detection-service` | 8083 | `lb://detection-service` | à faire : étapes 1 à 3 |
 | E4 | incidents-service | `incidents-service` | 8084 | `lb://incidents-service` | à faire : étapes 1 à 3 |
@@ -151,9 +152,9 @@ Pour chaque service, dans **sa propre PR** (par son responsable) :
    curl -i http://localhost:8080/api/<prefixe>/...      # 503 = pas (encore) inscrit
    ```
 
-4. Prévenir E5 : dans `deploy/integration/compose.eureka.yml`, E5 ajoute au
-   service `EUREKA_ENABLED: "true"` et `EUREKA_URL: http://eureka:8761/eureka`,
-   et passe son `*_URL` de la gateway à `lb://<nom>`.
+4. Dans `deploy/integration/compose.eureka.yml`, activer le client du service
+   avec `EUREKA_ENABLED: "true"` et `EUREKA_URL: http://eureka:8761/eureka`,
+   puis passer le `*_URL` correspondant de la gateway à `lb://<nom>`.
 
 Le service s'inscrit avec son adresse IP (`prefer-ip-address`) : dans Docker
 et Kubernetes, c'est l'adresse du conteneur ou du pod, joignable par la gateway

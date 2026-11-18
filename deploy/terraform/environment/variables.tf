@@ -237,9 +237,9 @@ variable "services_image_registry" {
 }
 
 variable "gateway_eureka_routes" {
-  description = "Services the gateway reaches through Eureka (lb://). The others keep a fixed address until their owner adds the Eureka client."
+  description = "Services the gateway reaches through Eureka (lb://); remaining services keep fixed addresses until they add a Eureka client."
   type        = list(string)
-  default     = ["assets"]
+  default     = ["assets", "telemetry", "simulator"]
 
   validation {
     condition     = alltrue([for s in var.gateway_eureka_routes : contains(["telemetry", "assets", "detection", "incidents", "notifications", "simulator"], s)])

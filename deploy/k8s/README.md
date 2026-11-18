@@ -6,7 +6,7 @@ ou les intégrer dans son déploiement (SCRUM-56). Rien ici n'a besoin d'un clou
 | Dossier | Carte | Contenu |
 | --- | --- | --- |
 | `assets/` | NFR-05 | Service des actifs : 2 réplicas, sondes liveness/readiness (Actuator), mise à jour sans coupure, arrêt gracieux |
-| `telemetry/` | NFR-04, NFR-05 | Service télémétrie : HPA CPU (2 à 6 pods, cible 70 %), sondes Actuator, mise à jour sans coupure |
+| `telemetry/` | NFR-04, NFR-05 | Service télémétrie : HPA CPU (2 à 6 pods, cible 70 %), client Eureka, sondes Actuator, mise à jour sans coupure |
 | `tls/` | NFR-14 | Certificat auto-signé (cert-manager), options TLS (`tlsoption.yaml` : TLS 1.2+ et chiffrements AEAD) et Ingress HTTPS (Traefik, fourni par k3s) |
 
 ## Prérequis (fournis par E5 / le cluster)

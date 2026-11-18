@@ -38,6 +38,14 @@ Cette API n'a pas encore de sécurité (la passerelle et Keycloak viendront plus
 
 Variables d'environnement (valeur locale par défaut) : `TELEMETRY_PORT` (8081), `TELEMETRY_DB_URL`, `DB_USER`, `DB_PASSWORD`.
 
+### Eureka (optionnel)
+
+Le service s'inscrit sous le nom `telemetry-service`. Eureka est désactivé
+par défaut ; pour activer l'inscription, définir `EUREKA_ENABLED=true` et
+`EUREKA_URL` (par exemple `http://eureka:8761/eureka` dans Docker/Kubernetes).
+Chaque instance annonce son adresse IP et utilise un bail court pour être
+retirée rapidement du registre en cas d'arrêt brutal.
+
 ### Test de volume (exigence : requête sur 24 h en 2 s au plus)
 - Test : `ReadingVolumeTests` — 100 000 mesures d'un capteur réparties sur 24 h, puis une requête sur toute la période (page de 1000).
 - Résultat mesuré : **90 ms** (seuil : 2 000 ms), PostgreSQL 18 en local.

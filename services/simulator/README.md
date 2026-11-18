@@ -50,6 +50,8 @@ Un capteur `PUMP_STATE` envoie `pumpState` (`NORMAL` ou `FAULT`) à la place de 
 | `SIM_INTERVAL_MS` | `1000` | Intervalle entre deux envois, en millisecondes |
 | `SIMULATOR_REQUEST_TIMEOUT` | `5s` | Délai maximal d'une requête d'ingestion |
 | `SENSORS_FILE` | `classpath:sensors.json` | Fichier des capteurs. Pour un fichier externe : `file:C:/chemin/sensors.json` |
+| `EUREKA_ENABLED` | `false` | Active l'inscription optionnelle du simulateur dans Eureka |
+| `EUREKA_URL` | `http://localhost:8761/eureka` | URL du serveur Eureka lorsque l'inscription est activée |
 
 ## Liste des capteurs
 
