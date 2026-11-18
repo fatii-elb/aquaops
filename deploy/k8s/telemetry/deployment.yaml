@@ -1,5 +1,5 @@
-# NFR-05 : service télémétrie, 2 réplicas, sondes Actuator, mise à jour sans coupure.
-# Même modèle que deploy/k8s/assets/. L'autoscaling (HPA 2 à 6 pods, NFR-04) est la carte de E1 : il se règle sur ce Deployment.
+# NFR-05 : service télémétrie, sondes Actuator, mise à jour sans coupure.
+# Le HPA NFR-04 (E1) gère les réplicas, de 2 à 6 : ne pas fixer spec.replicas.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,7 +7,6 @@ metadata:
   namespace: aquaops
   labels: { app: telemetry }
 spec:
-  replicas: 2
   strategy:
     type: RollingUpdate
     rollingUpdate:

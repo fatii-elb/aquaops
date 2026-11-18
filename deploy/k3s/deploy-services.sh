@@ -119,9 +119,23 @@ apply_tag() {
 }
 
 verify() {
-  local tag="$1" s want ready imgs code path expect
+  local tag="$1" s want ready imgs code path expect hpa_ready
   for s in $SERVICES; do
     k rollout status "deployment/$s" --timeout="$TIMEOUT" > /dev/null || { log "verify: $s did not roll out"; return 1; }
+    if [ "$s" = telemetry ]; then
+      # Its Deployment omits spec.replicas; wait for the HPA's minimum of 2.
+      hpa_ready=0
+      for _ in {1..60}; do
+        want="$(k get deployment "$s" -o jsonpath='{.spec.replicas}')"
+        ready="$(k get deployment "$s" -o jsonpath='{.status.readyReplicas}')"
+        if [ "${want:-0}" -ge 2 ] && [ "${ready:-0}" = "$want" ]; then
+          hpa_ready=1
+          break
+        fi
+        sleep 2
+      done
+      [ "$hpa_ready" = 1 ] || { log "verify: telemetry HPA did not reach 2 Ready replicas"; return 1; }
+    fi
     want="$(k get deployment "$s" -o jsonpath='{.spec.replicas}')"
     ready="$(k get deployment "$s" -o jsonpath='{.status.readyReplicas}')"
     [ "${ready:-0}" = "$want" ] || { log "verify: $s ready ${ready:-0}/$want"; return 1; }

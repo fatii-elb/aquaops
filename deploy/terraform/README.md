@@ -262,7 +262,7 @@ VM) garde `services_enabled = false` et les services de Docker Compose.
 | Service | Fichier | Port | Réplicas | Variables (comme `deploy/test/compose.yml`) | Mémoire demandée / limite | Mesurée au repos |
 | --- | --- | --- | --- | --- | --- | --- |
 | `gateway` | `services.tf` | 8080 | 1 | ConfigMap `gateway-routes` (profil `eureka`, `*_URL` fixes sauf `gateway_eureka_routes`, actuator `health` seul), `EUREKA_URL`, limite 500 req/s, clé `SIMULATOR_API_KEY` | 256 / 512 Mi | 237 Mi |
-| `telemetry` | `e2_services.tf` (**manifeste de E2**) | 8081 | 2 (E2) | ceux de E2 | 384 / 768 Mi × 2 | 275 et 284 Mi |
+| `telemetry` | `e2_services.tf` (**manifeste de E2**) | 8081 | HPA : 2–6 (CPU 70 %) | ceux de E2 | 384 / 768 Mi par pod | 275 et 284 Mi à 2 pods |
 | `assets` | `e2_services.tf` (**manifeste de E2**) | 8082 | 2 (E2) | ceux de E2 + audit des connexions (`AUDIT_KEYCLOAK_ENABLED`, `KEYCLOAK_BASE_URL`, secret) comme `compose.infra.yml` | 384 / 768 Mi × 2 | 345 et 338 Mi |
 | `detection` | `services.tf` | 8083 | 1 | depuis la PR #116 : `DETECTION_DB_URL` (base `aquaops_detection`, construite depuis `DB_HOST`/`DB_PORT`), `DB_*`, `KEYCLOAK_ISSUER_URI` (même émetteur qu'assets), `KAFKA_BOOTSTRAP_SERVERS` | 384 / 640 Mi (JPA depuis #116) | 189 Mi avant #116 ; 277 Mi avec #116 |
 | `incidents` | `services.tf` | 8084 | 1 | `INCIDENTS_DB_URL` (construite depuis `DB_HOST`/`DB_PORT` de `aquaops-config`), `KAFKA_BOOTSTRAP_SERVERS`, `DB_*` | 384 / 640 Mi | 295 Mi |
@@ -298,11 +298,13 @@ commande, le plan ou l'état). Les services attendent la fin du Job.
 ### Fichiers de E2 réutilisés tels quels
 
 `deploy/k8s/assets/` et `deploy/k8s/telemetry/` (Deployment, Service,
-PodDisruptionBudget) sont lus par `provider::kubernetes::manifest_decode` à
-chaque `plan`, jamais copiés : une modification de E2 est reprise telle quelle.
+PodDisruptionBudget et HPA) sont lus à chaque `plan` (Deployment avec
+`manifest_decode`, autres documents avec `manifest_decode_multi`), jamais
+copiés : une modification de E2 est reprise telle quelle.
 Ne changent que : namespace, étiquettes communes, image (registre, SHA,
-empreinte, `imagePullPolicy`), réplicas si `e2_replicas` le demande (par défaut
-la valeur de E2), `enableServiceLinks` et `automountServiceAccountToken` à
+empreinte, `imagePullPolicy`), réplicas d'assets si `e2_replicas` le demande
+(par défaut la valeur de E2 ; le nombre de réplicas telemetry est géré par son
+HPA), `enableServiceLinks` et `automountServiceAccountToken` à
 `false`, les 3 variables d'audit d'assets, et la **surcouche de sécurité E5**
 (uid/gid 999 déclarés donc `runAsNonRoot` vérifiable, racine en lecture seule,
 `/tmp` en `emptyDir`). Vérifié : les deux services démarrent et passent leurs
