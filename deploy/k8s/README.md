@@ -6,13 +6,15 @@ ou les intégrer dans son déploiement (SCRUM-56). Rien ici n'a besoin d'un clou
 | Dossier | Carte | Contenu |
 | --- | --- | --- |
 | `assets/` | NFR-05 | Service des actifs : 2 réplicas, sondes liveness/readiness (Actuator), mise à jour sans coupure, arrêt gracieux |
-| `tls/` | NFR-14 | Certificat auto-signé (cert-manager) et Ingress HTTPS (Traefik, fourni par k3s) |
+| `tls/` | NFR-14 | Certificat auto-signé (cert-manager) et Ingress HTTPS (Traefik, fourni par k3s), TLS 1.2 minimum et suites AEAD (`TLSOption`) |
 
 ## Prérequis (fournis par E5 / le cluster)
 
 - Secret `aquaops-db` (clés `DB_USER`, `DB_PASSWORD`) : créé par Terraform, jamais dans le dépôt.
 - Services du cluster nommés `postgres`, `kafka`, `keycloak`, `eureka`, `frontend`.
 - cert-manager installé (`tls/`).
+- namespace `aquaops` créé (`kubectl create namespace aquaops`) : aucun manifeste du dépôt ne le crée.
+- service `frontend` sur le port 8080 présent dans ce namespace : sans lui, Traefik ignore la route et l'option TLS ne s'applique pas.
 
 ## Appliquer
 
@@ -42,3 +44,14 @@ curl -vk https://aquaops.local/           # HTTPS, certificat auto-signé (-k ca
 ./testssl.sh https://aquaops.local        # aucun protocole faible (SSLv3, TLS 1.0/1.1) ni chiffrement faible
 ```
 Ajouter `aquaops.local` au fichier hosts de chaque poste (adresse IP de la VM).
+
+### Vérifier NFR-14 en local (kind)
+
+```bash
+kubectl port-forward -n traefik svc/traefik 8443:443   # dans un onglet dédié
+echo "127.0.0.1 aquaops.local" | sudo tee -a /etc/hosts
+./testssl.sh --ip 127.0.0.1 --nodns min aquaops.local:8443
+```
+
+Attendu : TLS 1.2 et 1.3 seulement, `Obsoleted CBC ciphers` : `not offered`, LUCKY13 : `not vulnerable`.
+Le certificat reste auto-signé (« chain of trust NOT ok ») : normal sans autorité publique.
