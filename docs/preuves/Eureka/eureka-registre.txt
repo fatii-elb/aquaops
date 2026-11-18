@@ -1,0 +1,55 @@
+Registre Eureka au 2026-11-18T00:51:34Z
+{
+    "applications": {
+        "versions__delta": "1",
+        "apps__hashcode": "UP_1_",
+        "application": [
+            {
+                "name": "ASSETS-SERVICE",
+                "instance": [
+                    {
+                        "instanceId": "assets-service:10.255.255.254:8082",
+                        "hostName": "10.255.255.254",
+                        "app": "ASSETS-SERVICE",
+                        "ipAddr": "10.255.255.254",
+                        "status": "UP",
+                        "overriddenStatus": "UNKNOWN",
+                        "port": {
+                            "$": 8082,
+                            "@enabled": "true"
+                        },
+                        "securePort": {
+                            "$": 443,
+                            "@enabled": "false"
+                        },
+                        "countryId": 1,
+                        "dataCenterInfo": {
+                            "@class": "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo",
+                            "name": "MyOwn"
+                        },
+                        "leaseInfo": {
+                            "renewalIntervalInSecs": 5,
+                            "durationInSecs": 15,
+                            "registrationTimestamp": 1794962846796,
+                            "lastRenewalTimestamp": 1794963106526,
+                            "evictionTimestamp": 0,
+                            "serviceUpTimestamp": 1794962845945
+                        },
+                        "metadata": {
+                            "management.port": "8082"
+                        },
+                        "homePageUrl": "http://10.255.255.254:8082/",
+                        "statusPageUrl": "http://10.255.255.254:8082/actuator/info",
+                        "healthCheckUrl": "http://10.255.255.254:8082/actuator/health",
+                        "vipAddress": "assets-service",
+                        "secureVipAddress": "assets-service",
+                        "isCoordinatingDiscoveryServer": "false",
+                        "lastUpdatedTimestamp": "1794962846796",
+                        "lastDirtyTimestamp": "1794962845690",
+                        "actionType": "ADDED"
+                    }
+                ]
+            }
+        ]
+    }
+}
