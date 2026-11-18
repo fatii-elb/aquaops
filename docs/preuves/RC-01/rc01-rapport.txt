@@ -1,0 +1,28 @@
+=== Étape 1 : lancement du scénario « fuite » ===
+  OK : scénario fuite démarré
+=== Étape 2 : anomalie LEAK_SUSPECTED dans anomaly-detected ===
+  OK : anomalie détectée à 2026-11-10T20:09:12.975481Z
+=== Étape 3 : incident critique créé ===
+  OK : incident critique créé (id 44)
+=== Étape 4 : notification reçue ===
+  OK : notification reçue (7 -> 9)
+=== Étape 5 : confirmer l'incident ===
+  OK : incident : état CONFIRMED
+=== Étape 6 : affecter l'incident ===
+  OK : incident : état ASSIGNED
+=== Étape 7 : créer et affecter l'intervention ===
+  OK : intervention créée (id 1)
+  OK : intervention affectée
+=== Étape 8 : en cours ===
+  OK : incident : état IN_PROGRESS
+  OK : intervention : statut IN_PROGRESS
+=== Étape 9 : résolu et clos ===
+  OK : intervention : statut DONE
+  OK : incident : état RESOLVED
+  OK : incident : état CLOSED
+=== Étape 10 : état final et historique ===
+  OK : incident 44 clos
+  OK : historique présent
+  OK : intervention 1 terminée
+=== Résultat ===
+RC-01 : toutes les étapes OK
