@@ -1,6 +1,5 @@
 server:
   port: ${NOTIFICATIONS_PORT:8085}
-  # Arret gracieux : les requetes en cours se terminent avant l'arret du pod (NFR-05, NFR-07).
   shutdown: graceful
 spring:
   application:
@@ -11,10 +10,13 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
       auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 10
+    listener:
+      ack-mode: manual_immediate
 management:
   endpoint:
     health:
-      # /actuator/health/liveness et /actuator/health/readiness : sondes Kubernetes (NFR-05).
       probes:
         enabled: true
   endpoints:
@@ -23,8 +25,6 @@ management:
         include: health
 eureka:
   client:
-    # Exigence de l'enseignant : inscription dans Eureka. Desactive par defaut,
-    # activer avec EUREKA_ENABLED=true (voir deploy/).
     enabled: ${EUREKA_ENABLED:false}
     service-url:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
