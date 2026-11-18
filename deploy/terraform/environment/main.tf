@@ -20,15 +20,17 @@ locals {
   # Addresses as seen from inside the namespace (Kubernetes Service names),
   # the same names as deploy/test/compose.yml and E2's manifests.
   config = merge({
-    AQUAOPS_ENVIRONMENT     = var.environment
-    DB_HOST                 = "postgres"
-    DB_PORT                 = "5432"
-    KAFKA_BOOTSTRAP_SERVERS = "kafka:9092"
-    EUREKA_ENABLED          = "true"
-    EUREKA_URL              = "http://eureka:8761/eureka"
-    KEYCLOAK_BASE_URL       = "http://keycloak:8180"
+    AQUAOPS_ENVIRONMENT         = var.environment
+    DB_HOST                     = "postgres"
+    DB_PORT                     = "5432"
+    KAFKA_BOOTSTRAP_SERVERS     = "kafka:9092"
+    EUREKA_ENABLED              = "true"
+    EUREKA_URL                  = "http://eureka:8761/eureka"
+    GATEWAY_URL                 = "http://gateway:8080"
+    TELEMETRY_INGEST_RATE_LIMIT = "500"
+    KEYCLOAK_BASE_URL           = "http://keycloak:8180"
     # Must equal the "iss" of the tokens: to agree with E2 (single issuer URL).
-    KEYCLOAK_ISSUER_URI = "http://keycloak:8180/realms/aquaops"
+    KEYCLOAK_ISSUER_URI         = "http://keycloak:8180/realms/aquaops"
   }, var.config)
 }
 
@@ -240,6 +242,28 @@ resource "kubernetes_secret_v1" "keycloak" {
         var.keycloak_audit_client_secret != null,
       ])
       error_message = "TF_VAR_keycloak_admin, TF_VAR_keycloak_admin_password and TF_VAR_keycloak_audit_client_secret are required for apply."
+    }
+  }
+}
+
+resource "kubernetes_secret_v1" "simulator" {
+  count = local.svc
+
+  metadata {
+    name      = "aquaops-simulator"
+    namespace = kubernetes_namespace_v1.this.metadata[0].name
+    labels    = local.labels
+  }
+
+  data_wo = {
+    SIMULATOR_API_KEY = var.simulator_api_key
+  }
+  data_wo_revision = var.secrets_revision
+
+  lifecycle {
+    precondition {
+      condition     = var.simulator_api_key != null
+      error_message = "TF_VAR_simulator_api_key is required when services_enabled = true."
     }
   }
 }

@@ -119,6 +119,14 @@ variable "keycloak_audit_client_secret" {
   ephemeral = true
 }
 
+variable "simulator_api_key" {
+  description = "Shared secret used by the simulator and gateway to authenticate telemetry ingestion."
+  type        = string
+  default     = null
+  sensitive   = true
+  ephemeral   = true
+}
+
 # -----------------------------------------------------------------------------
 # Private images on GHCR
 # -----------------------------------------------------------------------------

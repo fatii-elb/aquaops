@@ -327,6 +327,8 @@ et `deploy/test/compose.infra.yml`) :
 | `DB_USER` | oui | Compte PostgreSQL. |
 | `DB_PASSWORD` | oui | Mot de passe propre à cet environnement. |
 | `KAFKA_BOOTSTRAP_SERVERS` | oui | Adresse Kafka vue par les conteneurs (`kafka:9092` si l'infrastructure est dans Docker). |
+| `SIMULATOR_API_KEY` | oui | Clé de service aléatoire partagée entre le simulateur et la gateway pour authentifier l'ingestion de télémétrie. |
+| `TELEMETRY_INGEST_RATE_LIMIT` | non (500) | Nombre maximal de requêtes d'ingestion par seconde et par instance de gateway. |
 | `KEYCLOAK_ISSUER_URI` | oui | Doit être **exactement** l'`iss` des jetons (voir § 4). |
 | `KEYCLOAK_ADMIN`, `KEYCLOAK_ADMIN_PASSWORD` | oui avec `compose.infra.yml` | Compte administrateur de Keycloak. |
 | `KEYCLOAK_AUDIT_CLIENT_SECRET` | oui avec `compose.infra.yml` | Secret du client Keycloak `aquaops-audit` (audit des connexions, FR-24), lu par l'import du realm et par assets-service. Valeur propre à cet environnement (par exemple générée avec `openssl rand -hex 24`), jamais `change-me`. |
@@ -384,7 +386,7 @@ déploiements simultanés.
 | Sujet | Options | Qui décide |
 | --- | --- | --- |
 | **PostgreSQL** | Dans Docker sur la VM (`compose.infra.yml`, volume `aquaops-test_pgdata`, 4 bases créées au premier démarrage) **ou** serveur existant (`DB_HOST`). Sauvegarde du volume ? | Administrateur + E5 |
-| **Kafka** | Dans Docker (`kafka:9092`, volume `aquaops-test_kafkadata`, topics créés automatiquement) **ou** broker existant (`KAFKA_BOOTSTRAP_SERVERS`). | Administrateur + E5 |
+| **Kafka** | Dans Docker (`kafka:9092`, volume `aquaops-test_kafkadata`, topics créés automatiquement) **ou** broker existant (`KAFKA_BOOTSTRAP_SERVERS`). Le simulateur publie via HTTP à travers la gateway ; telemetry écrit ensuite dans Kafka. | Administrateur + E5 |
 | **Keycloak** | `compose.infra.yml` le lance en mode `start-dev` : **test uniquement** (HTTP, base interne). Le realm (avec ses 4 utilisateurs de test) est importé depuis `docs/keycloak/` ; `KEYCLOAK_AUDIT_CLIENT_SECRET` est obligatoire. Les **utilisateurs créés à la main sont perdus** quand le conteneur est recréé. | E2 + administrateur |
 | **Exposition de la gateway** | Par défaut `127.0.0.1:8080` : accessible seulement depuis la VM. Pour la démo, deux possibilités : **tunnel SSH** (rien à ouvrir) **ou** `GATEWAY_BIND` sur une interface réseau + règle de pare-feu limitée aux adresses autorisées. | Administrateur |
 | **Issuer Keycloak** | `KEYCLOAK_ISSUER_URI` doit être **identique** à l'`iss` des jetons. Ce champ dépend de l'adresse à laquelle le **navigateur** joint Keycloak. Si le navigateur passe par `http://localhost:8180` (tunnel) alors que les services utilisent `http://keycloak:8180`, les jetons sont refusés (401). Il faut fixer une seule adresse publique de Keycloak, joignable par le navigateur **et** par les conteneurs. | **E2** |

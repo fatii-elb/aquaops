@@ -1,13 +1,14 @@
 # simulator
 
-Simulateur de capteurs (FR-03, SCRUM-25). Il lit une liste de capteurs, génère une mesure par capteur chaque seconde et la publie dans le topic Kafka `sensor-readings` (contrat `contracts/events/sensor-readings.v1.json`).
+Simulateur de capteurs (FR-03, SCRUM-25). Il lit une liste de capteurs, génère une mesure par capteur et l'envoie en HTTP au service de télémétrie via la gateway. La gateway authentifie le simulateur et limite le débit ; le service valide la mesure puis la publie dans Kafka `sensor-readings` (contrat `contracts/events/sensor-readings.v1.json`).
 
 Les valeurs viennent du scénario actif (voir `SCENARIOS.md`) : normal par défaut, ou une panne (fuite, pompe, silence, pic).
 
 ## Prérequis
 
 - Java 21
-- Un Kafka accessible sur `localhost:9092`, avec le topic `sensor-readings`
+- La gateway accessible sur `localhost:8080`
+- Le service telemetry et Kafka accessibles via la gateway
 
 Exemple avec Docker :
 
@@ -43,9 +44,11 @@ Un capteur `PUMP_STATE` envoie `pumpState` (`NORMAL` ou `FAULT`) à la place de 
 
 | Variable | Valeur par défaut | Rôle |
 | --- | --- | --- |
-| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Adresse de Kafka |
 | `SIMULATOR_PORT` | `8086` | Port HTTP du simulateur |
+| `GATEWAY_URL` | `http://localhost:8080` | Adresse de la gateway |
+| `SIMULATOR_API_KEY` | `local-dev-only` | Clé partagée avec la gateway ; utiliser une valeur aléatoire hors démo locale |
 | `SIM_INTERVAL_MS` | `1000` | Intervalle entre deux envois, en millisecondes |
+| `SIMULATOR_REQUEST_TIMEOUT` | `5s` | Délai maximal d'une requête d'ingestion |
 | `SENSORS_FILE` | `classpath:sensors.json` | Fichier des capteurs. Pour un fichier externe : `file:C:/chemin/sensors.json` |
 
 ## Liste des capteurs
@@ -63,9 +66,9 @@ curl -X POST http://localhost:8086/api/simulator/scenarios/stop
 
 ## Mode charge (NFR-01)
 
-Le mode charge envoie un débit soutenu de mesures dans `sensor-readings` et compte
-les messages confirmés par Kafka. Le simulateur doit tourner. Pendant le test, le
-simulateur normal est en pause.
+Le mode charge envoie un débit soutenu de mesures via la gateway et compte les
+réponses HTTP réussies (la télémétrie ne répond qu'après confirmation Kafka).
+Le simulateur doit tourner. Pendant le test, le simulateur normal est en pause.
 
 ```bash
 # Démarrer 500 mesures/s pendant 300 s (valeurs par défaut)
@@ -78,7 +81,7 @@ curl -i http://localhost:8086/api/simulator/load
 curl -i -X POST http://localhost:8086/api/simulator/load/stop
 ```
 
-Le statut renvoie `attempted` (envois tentés), `acked` (confirmés par Kafka),
+Le statut renvoie `attempted` (envois tentés), `acked` (acceptés par le service de télémétrie),
 `failed` (en échec), `startedAt` et `endedAt`. Le nombre de mesures à comparer
 avec la base est `acked`.
 
@@ -94,6 +97,6 @@ Remarques :
 ./mvnw test
 ```
 
-Le test `SimulatorPublisherKafkaTests` démarre un Kafka de test en mémoire (EmbeddedKafka) : ni Docker ni Kafka local ne sont nécessaires pour les tests.
-
-Le test `LoadGeneratorKafkaTests` vérifie que le compteur du mode charge est exact : le nombre de messages confirmés (`acked`) est égal au nombre de messages réellement ajoutés dans le topic.
+Les tests `SimulatorPublisherHttpTests` et `TelemetryIngestClientTests` utilisent
+un faux serveur HTTP local : ni gateway, ni Docker, ni Kafka local ne sont
+nécessaires pour les tests.

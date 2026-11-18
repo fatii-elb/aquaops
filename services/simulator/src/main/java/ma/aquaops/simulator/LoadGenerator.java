@@ -8,23 +8,19 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import ma.aquaops.simulator.scenario.Sample;
 import ma.aquaops.simulator.scenario.ScenarioRegistry;
 
-/** Mode charge (NFR-01) : debit soutenu, avec comptage des messages confirmes par Kafka. */
+/** Mode charge (NFR-01) : debit soutenu, avec comptage des mesures acceptees par la passerelle. */
 @Component
 public class LoadGenerator {
-
-    private static final String TOPIC = "sensor-readings";
 
     public record Status(boolean running, int rate, int seconds,
                          long attempted, long acked, long failed,
                          String startedAt, String endedAt) {}
 
-    private final KafkaTemplate<String, String> kafka;
     private final SimulatorPublisher publisher;
     private final ScenarioRegistry scenarios;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -36,6 +32,7 @@ public class LoadGenerator {
     private final AtomicLong attempted = new AtomicLong();
     private final AtomicLong acked = new AtomicLong();
     private final AtomicLong failed = new AtomicLong();
+    private final AtomicLong inFlight = new AtomicLong();
 
     private ScheduledFuture<?> task;
     private volatile boolean running;
@@ -46,11 +43,10 @@ public class LoadGenerator {
     private long durationNanos;
     private long startNanos;
     private long index;
+    private boolean completionRequested;
 
-    public LoadGenerator(KafkaTemplate<String, String> kafka,
-                         SimulatorPublisher publisher,
+    public LoadGenerator(SimulatorPublisher publisher,
                          ScenarioRegistry scenarios) {
-        this.kafka = kafka;
         this.publisher = publisher;
         this.scenarios = scenarios;
     }
@@ -76,6 +72,8 @@ public class LoadGenerator {
         attempted.set(0);
         acked.set(0);
         failed.set(0);
+        inFlight.set(0);
+        completionRequested = false;
         endedAt = null;
         startedAt = Instant.now();
         startNanos = System.nanoTime();
@@ -86,7 +84,7 @@ public class LoadGenerator {
 
     public synchronized void stop() {
         if (running) {
-            finish();
+            requestCompletion();
         }
     }
 
@@ -109,27 +107,48 @@ public class LoadGenerator {
             Sensor s = capteurs.get((int) (index++ % capteurs.size()));
             Sample mesure = scenarios.mesure(s.type());
             attempted.incrementAndGet();
+            inFlight.incrementAndGet();
             try {
-                kafka.send(TOPIC, String.valueOf(s.sensorId()), publisher.enJson(s, mesure))
-                        .whenComplete((result, erreur) -> {
-                            if (erreur == null) {
-                                acked.incrementAndGet();
-                            } else {
-                                failed.incrementAndGet();
-                            }
-                        });
-            } catch (Exception e) {
+                publisher.envoyer(s, mesure).whenComplete((ignored, error) -> {
+                    if (error == null) {
+                        acked.incrementAndGet();
+                    } else {
+                        failed.incrementAndGet();
+                    }
+                    if (inFlight.decrementAndGet() == 0) {
+                        finishIfReady();
+                    }
+                });
+            } catch (RuntimeException e) {
                 failed.incrementAndGet();
+                if (inFlight.decrementAndGet() == 0) {
+                    finishIfReady();
+                }
             }
         }
         if (elapsed >= durationNanos) {
+            requestCompletion();
+        }
+    }
+
+    private synchronized void requestCompletion() {
+        completionRequested = true;
+        if (task != null) {
+            task.cancel(false);
+        }
+        finishIfReady();
+    }
+
+    private synchronized void finishIfReady() {
+        if (running && completionRequested && inFlight.get() == 0) {
             finish();
         }
     }
 
     private synchronized void finish() {
-        task.cancel(false);
-        kafka.flush(); // attend que tous les messages soient confirmes ou en echec
+        if (task != null) {
+            task.cancel(false);
+        }
         publisher.setPause(false);
         running = false;
         endedAt = Instant.now();
