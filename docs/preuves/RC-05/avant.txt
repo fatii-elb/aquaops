@@ -1,0 +1,3 @@
+NAME                     READY   STATUS    RESTARTS   AGE
+assets-68d7d547f-dmjdl   1/1     Running   0          87s
+assets-68d7d547f-kfpdh   1/1     Running   0          113s

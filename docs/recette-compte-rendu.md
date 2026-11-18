@@ -10,19 +10,19 @@
 
 | RC | Réussi / Écart | Date | Preuve (fichier) | Commentaire |
 | --- | --- | --- | --- | --- |
-| RC-01 | | | | |
-| RC-02 | | | | |
-| RC-03 | | | | |
-| RC-04 | | | | |
-| RC-05 | | | | |
-| RC-06 | | | | |
-| RC-07 | | | | |
-| RC-08 | | | | |
-| RC-09 | | | | |
-| RC-10 | | | | |
-| RC-11 | | | | |
+| RC-01 | Non exécuté | | | Responsable : E1 |
+| RC-02 | Non exécuté | | | Responsable : E1 |
+| RC-03 | Non exécuté | | | Responsable : E3 |
+| RC-04 | Non exécuté | | | Responsable : E1 |
+| RC-05 | Réussi (avec réserves) | 18 nov. 2026 | docs/preuves/RC-05/ (telemetrie-sous-charge.txt, telemetrie-methode.md) | Pod de télémétrie consommateur supprimé sous charge : rétabli en 22 s, 36000 envoyées = 36000 stockées. Réserves : kind, un seul essai, arrêt gracieux, sans passerelle ; à refaire sur k3s. |
+| RC-06 | Non exécuté | | | Responsable : E3 |
+| RC-07 | Réussi | 14 nov. 2026 | docs/preuves/RC-07/ (rc07-forbidden.png, rc07-api-403.png) | 4 rôles testés sur les écrans, conformes à la matrice. API testée avec le rôle opérateur seulement. |
+| RC-08 | Non exécuté | | | Responsables : E3, E4 |
+| RC-09 | Non exécuté | | | Responsable : E1 |
+| RC-10 | Non exécuté | | | Responsable : E4 |
+| RC-11 | Non exécuté | | | Responsable : E5 |
 
-**Bilan :** ... RC réussis sur 11.
+**Bilan :** 2 RC réussis sur 11 à ce jour (RC-05 avec réserves, RC-07), 9 non exécutés.
 
 ## Écarts
 

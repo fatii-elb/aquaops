@@ -1,0 +1,20 @@
+=== 1. Situation de départ ===
+  pods télémétrie prêts : 2
+  OK : au moins 2 pods prêts avant le test
+=== 2. Démarrage de la charge (200 mesures/s pendant 180 s) ===
+  OK : charge démarrée (HTTP 200)
+=== 3. Suppression d'un pod de télémétrie ===
+  pod qui consomme le topic : telemetry-c557d5f4b-mdccs (IP 172.23.0.2)
+  pod supprimé : telemetry-c557d5f4b-mdccs
+  pods prêts au plus bas : 1 sur 2
+  OK : service rétabli en 22 s (limite 60 s)
+  OK : jamais moins d'un pod prêt : le service n'a pas été coupé
+=== 4. Fin de la charge et retour du retard (LAG) à 0 ===
+  OK : charge terminée
+  OK : retard du groupe telemetry-validation revenu à 0
+=== 5. Mesures envoyées et stockées ===
+  simulateur : acquittées=36000 échouées=0 fenêtre 2026-11-18T02:51:28.087652244Z -> 2026-11-18T02:54:28.088063269Z
+  mesures stockées sur la fenêtre : 36000
+  OK : envoyées = stockées (36000) : 0 perte
+=== Résultat ===
+RC-05 : RÉUSSI
