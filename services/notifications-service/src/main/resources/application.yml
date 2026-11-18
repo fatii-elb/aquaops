@@ -21,6 +21,15 @@ management:
     web:
       exposure:
         include: health
+eureka:
+  client:
+    # Exigence de l'enseignant : inscription dans Eureka. Desactive par defaut,
+    # activer avec EUREKA_ENABLED=true (voir deploy/).
+    enabled: ${EUREKA_ENABLED:false}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
 springdoc:
   api-docs:
     path: /api/notifications/v3/api-docs
