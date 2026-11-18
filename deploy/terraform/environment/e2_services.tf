@@ -1,13 +1,15 @@
 # =============================================================================
 # assets and telemetry from E2's manifests, REUSED AS THEY ARE (NFR-05:
-# 2 replicas, probes, PodDisruptionBudget, graceful stop; assets also
-# registers in Eureka). SCRUM-56 / NFR-09, E5.
+# probes, PodDisruptionBudget, graceful stop; assets also registers in
+# Eureka). Telemetry replica count is managed by its HPA (NFR-04).
+# SCRUM-56 / NFR-09, E5.
 #
 # deploy/k8s/<service>/deployment.yaml and service.yaml are read at plan time,
 # never copied: a change by E2 is picked up by the next plan. Only what an
 # environment must decide is changed here, on the decoded objects:
 #   - namespace, common labels, image (registry, SHA, digest, pull policy);
-#   - replicas only if e2_replicas says so (default: E2's value, 2);
+#   - replicas for assets if e2_replicas says so; telemetry replicas are
+#     omitted so the HPA exclusively manages them;
 #   - no injected <SERVICE>_PORT variables, no Kubernetes API token;
 #   - E5 hardening, checked on the cluster: uid/gid 999 declared (so
 #     runAsNonRoot can be verified), read-only root file system, /tmp on an
@@ -64,31 +66,34 @@ locals {
         namespace = local.ns
         labels    = merge(local.labels, d.metadata.labels, { "app.kubernetes.io/name" = s })
       })
-      spec = merge(d.spec, {
-        replicas = lookup(var.e2_replicas, s, d.spec.replicas)
-        template = merge(d.spec.template, {
-          metadata = merge(d.spec.template.metadata, {
-            labels = merge(local.labels, d.spec.template.metadata.labels, { "app.kubernetes.io/name" = s })
-          })
-          spec = merge(d.spec.template.spec, {
-            enableServiceLinks           = false
-            automountServiceAccountToken = false
-            securityContext = merge(try(d.spec.template.spec.securityContext, {}), {
-              runAsNonRoot = true
-              runAsUser    = 999 # user "aquaops" of deploy/docker/spring-service.Dockerfile
-              runAsGroup   = 999
+      spec = merge(
+        { for key, value in d.spec : key => value if !(s == "telemetry" && key == "replicas") },
+        { for key, value in { replicas = lookup(var.e2_replicas, s, try(d.spec.replicas, 2)) } : key => value if s == "assets" },
+        {
+          template = merge(d.spec.template, {
+            metadata = merge(d.spec.template.metadata, {
+              labels = merge(local.labels, d.spec.template.metadata.labels, { "app.kubernetes.io/name" = s })
             })
-            containers = [local.e2_container[s]]
-            volumes = concat(try(d.spec.template.spec.volumes, []), [
-              { name = "tmp", emptyDir = { sizeLimit = "64Mi" } },
-            ])
+            spec = merge(d.spec.template.spec, {
+              enableServiceLinks           = false
+              automountServiceAccountToken = false
+              securityContext = merge(try(d.spec.template.spec.securityContext, {}), {
+                runAsNonRoot = true
+                runAsUser    = 999 # user "aquaops" of deploy/docker/spring-service.Dockerfile
+                runAsGroup   = 999
+              })
+              containers = [local.e2_container[s]]
+              volumes = concat(try(d.spec.template.spec.volumes, []), [
+                { name = "tmp", emptyDir = { sizeLimit = "64Mi" } },
+              ])
+            })
           })
-        })
-      })
+        }
+      )
     })
   }
 
-  # Service and PodDisruptionBudget of each E2 service, keyed "<svc>/<Kind>/<name>".
+  # Service, PodDisruptionBudget, and HPA documents, keyed "<svc>/<Kind>/<name>".
   e2_other_docs = merge([
     for s in local.e2_services : {
       for doc in local.e2_others[s] : "${s}/${doc.kind}/${doc.metadata.name}" => doc

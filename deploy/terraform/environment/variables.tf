@@ -261,13 +261,13 @@ variable "services_image_digests" {
 }
 
 variable "e2_replicas" {
-  description = "Replica count for E2's services (assets, telemetry). Unset = the value of E2's manifest (2, NFR-05)."
+  description = "Replica override for E2's assets service only. Telemetry replicas are managed by its HPA."
   type        = map(number)
   default     = {}
 
   validation {
-    condition     = alltrue([for k, v in var.e2_replicas : contains(["assets", "telemetry"], k) && v >= 1 && v <= 6])
-    error_message = "e2_replicas: keys assets or telemetry, 1 to 6 replicas."
+    condition     = alltrue([for k, v in var.e2_replicas : k == "assets" && v >= 1 && v <= 6])
+    error_message = "e2_replicas: only the assets key is supported, with 1 to 6 replicas."
   }
 }
 
