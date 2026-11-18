@@ -262,12 +262,12 @@ VM) garde `services_enabled = false` et les services de Docker Compose.
 | Service | Fichier | Port | Réplicas | Variables (comme `deploy/test/compose.yml`) | Mémoire demandée / limite | Mesurée au repos |
 | --- | --- | --- | --- | --- | --- | --- |
 | `gateway` | `services.tf` | 8080 | 1 | ConfigMap `gateway-routes` (profil `eureka`, `*_URL` fixes sauf `gateway_eureka_routes`, actuator `health` seul), `EUREKA_URL`, limite 500 req/s, clé `SIMULATOR_API_KEY` | 256 / 512 Mi | 237 Mi |
-| `telemetry` | `e2_services.tf` (**manifeste de E2**) | 8081 | HPA : 2–6 (CPU 70 %) | ceux de E2 | 384 / 768 Mi par pod | 275 et 284 Mi à 2 pods |
+| `telemetry` | `e2_services.tf` (**manifeste de E2**) | 8081 | HPA : 2–6 (CPU 70 %) | ceux de E2 + client Eureka | 384 / 768 Mi par pod | 275 et 284 Mi à 2 pods |
 | `assets` | `e2_services.tf` (**manifeste de E2**) | 8082 | 2 (E2) | ceux de E2 + audit des connexions (`AUDIT_KEYCLOAK_ENABLED`, `KEYCLOAK_BASE_URL`, secret) comme `compose.infra.yml` | 384 / 768 Mi × 2 | 345 et 338 Mi |
 | `detection` | `services.tf` | 8083 | 1 | depuis la PR #116 : `DETECTION_DB_URL` (base `aquaops_detection`, construite depuis `DB_HOST`/`DB_PORT`), `DB_*`, `KEYCLOAK_ISSUER_URI` (même émetteur qu'assets), `KAFKA_BOOTSTRAP_SERVERS` | 384 / 640 Mi (JPA depuis #116) | 189 Mi avant #116 ; 277 Mi avec #116 |
 | `incidents` | `services.tf` | 8084 | 1 | `INCIDENTS_DB_URL` (construite depuis `DB_HOST`/`DB_PORT` de `aquaops-config`), `KAFKA_BOOTSTRAP_SERVERS`, `DB_*` | 384 / 640 Mi | 295 Mi |
 | `notifications` | `services.tf` | 8085 | 1 | `NOTIFICATIONS_DB_URL` (idem), `KAFKA_BOOTSTRAP_SERVERS`, `DB_*`, `SPRING_JPA_SHOW_SQL=false` | 384 / 640 Mi | 287 Mi |
-| `simulator` | `services.tf` | 8086 | 1 | `GATEWAY_URL`, secret `SIMULATOR_API_KEY` | 192 / 384 Mi | 186 Mi |
+| `simulator` | `services.tf` | 8086 | 1 | `GATEWAY_URL`, client Eureka, secret `SIMULATOR_API_KEY` | 192 / 384 Mi | 186 Mi |
 
 Mesures `kubectl top` dans le bac à sable (16/11/2026, au repos, simulateur
 actif). Namespace `rc11` entier : **4,0 Gio** et 1,2 CPU (13 pods, infrastructure comprise ; mesure prise quelques minutes après un retour arrière, CPU d'assets et de la gateway encore en chauffe) ; nœud : 6,0 Gio (k3s, add-ons, `rc11` et le namespace `test` vide).
@@ -325,7 +325,7 @@ création) :
 ### Gateway et Eureka
 
 Profil `eureka` actif. Une route listée dans `gateway_eureka_routes`
-(aujourd'hui `["assets"]`, seul service avec le client Eureka) va vers
+(désormais `["assets", "telemetry", "simulator"]`) va vers
 `lb://<spring.application.name>` ; les autres gardent leur adresse fixe
 (`http://telemetry:8081`...). Tout est visible dans le ConfigMap
 `gateway-routes` ; un changement redémarre la gateway (annotation
@@ -525,7 +525,7 @@ Activer (après revue et accord) : installer le wrapper, créer l'environnement
 
 | Qui | Quoi | Dépendance pour SCRUM-56 |
 | --- | --- | --- |
-| E1 | HPA de la télémétrie (NFR-04), client Eureka de telemetry | se règle sur le Deployment `telemetry` de E2 ; ajouter `telemetry` à `gateway_eureka_routes` quand le client existe |
+| E1 | HPA de la télémétrie (NFR-04), clients Eureka de telemetry et simulator | le HPA se règle sur le Deployment `telemetry` de E2 ; les deux routes sont configurées dans `gateway_eureka_routes` |
 | E2 | manifestes `deploy/k8s/{assets,telemetry,tls}`, RC-05, RC-07, realm Keycloak | réutilisés sans copie ; proposer la surcouche de sécurité dans leurs fichiers ; temps de démarrage (RC-05) |
 | E3 | Gitleaks (`gitleaks.yml`, `.gitleaks.toml`), detection-service | réutilisés tels quels par le pipeline |
 | E4 | frontend (image Angular), RC-10 | PR « Frontend + Ingress » |

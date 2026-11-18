@@ -31,12 +31,12 @@ spec:
             - { name: HEALTHCHECK_PORT, value: "8081" }
             - { name: TELEMETRY_DB_URL, value: "jdbc:postgresql://postgres:5432/aquaops_telemetry" }
             - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
+            - { name: EUREKA_ENABLED, value: "true" }
+            - { name: EUREKA_URL, value: "http://eureka:8761/eureka" }
             - name: DB_USER
               valueFrom: { secretKeyRef: { name: aquaops-db, key: DB_USER } }
             - name: DB_PASSWORD
               valueFrom: { secretKeyRef: { name: aquaops-db, key: DB_PASSWORD } }
-            # Inscription dans Eureka : à ajouter quand le client Eureka est dans le service (carte de E1) :
-            #   EUREKA_ENABLED=true et EUREKA_URL=http://eureka:8761/eureka
           resources:
             requests: { cpu: 200m, memory: 384Mi }   # requests obligatoires pour que le HPA calcule l'utilisation CPU
             limits: { cpu: "1", memory: 768Mi }

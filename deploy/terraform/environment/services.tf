@@ -90,7 +90,7 @@ locals {
     simulator = {
       memory      = ["192Mi", "384Mi"]
       env         = {}
-      from_config = ["GATEWAY_URL"]
+      from_config = ["GATEWAY_URL", "EUREKA_ENABLED", "EUREKA_URL"]
       db          = false
       ingress     = false
     }
