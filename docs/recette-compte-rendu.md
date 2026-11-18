@@ -14,7 +14,7 @@
 | RC-02 | Non exécuté | | | Responsable : E1 |
 | RC-03 | Non exécuté | | | Responsable : E3 |
 | RC-04 | Non exécuté | | | Responsable : E1 |
-| RC-05 | Écart (partiel) | 18 nov. 2026 | docs/preuves/RC-05/ (avant.txt, apres.txt, sonde-disponibilite.txt) | Pod du service des actifs supprimé sur kind : rétabli en 27 s, 0 échec de la sonde (2 essais). Télémétrie sous charge, reprise Kafka et mesures envoyées = stockées non testées. |
+| RC-05 | Réussi (avec réserves) | 18 nov. 2026 | docs/preuves/RC-05/ (telemetrie-sous-charge.txt, telemetrie-methode.md) | Pod de télémétrie consommateur supprimé sous charge : rétabli en 22 s, 36000 envoyées = 36000 stockées. Réserves : kind, un seul essai, arrêt gracieux, sans passerelle ; à refaire sur k3s. |
 | RC-06 | Non exécuté | | | Responsable : E3 |
 | RC-07 | Réussi | 14 nov. 2026 | docs/preuves/RC-07/ (rc07-forbidden.png, rc07-api-403.png) | 4 rôles testés sur les écrans, conformes à la matrice. API testée avec le rôle opérateur seulement. |
 | RC-08 | Non exécuté | | | Responsables : E3, E4 |
@@ -22,7 +22,7 @@
 | RC-10 | Non exécuté | | | Responsable : E4 |
 | RC-11 | Non exécuté | | | Responsable : E5 |
 
-**Bilan :** 1 RC réussi sur 11 à ce jour (RC-07), 1 écart (RC-05, partiel), 9 non exécutés.
+**Bilan :** 2 RC réussis sur 11 à ce jour (RC-05 avec réserves, RC-07), 9 non exécutés.
 
 ## Écarts
 
