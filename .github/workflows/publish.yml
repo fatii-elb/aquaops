@@ -12,25 +12,30 @@
 #     gitleaks     the Gitleaks workflow (gitleaks.yml, E3) on S, in parallel
 #                  with ci: the security gate, no image is built without it
 #     build-java   needs ci AND gitleaks; 7 images, one job each, all from the
-#                  shared Dockerfile; skipped if CI or Gitleaks did not succeed
-#     images       single result: green only if CI, Gitleaks and all builds are
+#                  shared Dockerfile; scans and exports one CycloneDX SBOM per
+#                  image; skipped if CI or Gitleaks did not succeed
+#     images       single result: green only if CI, Gitleaks and all builds,
+#                  scans and SBOM uploads succeed
 #
 #     build-frontend  the Angular image (frontend/Dockerfile, E4), same checks
+#                     and CycloneDX SBOM
 #
 #     publish-policy  reads GHCR_PUBLISH: off | dry-run | on ("on" refused
 #                     while Trivy is audit-only)
-#     publish      only if CI, Gitleaks, the 8 builds and their scans all
+#     publish      only if CI, Gitleaks, the 8 builds, scans and SBOMs all
 #                  succeeded: reloads the 8 SCANNED images (no rebuild), checks
 #                  they are identical, then (mode "on") pushes them with their
-#                  full-SHA tag. The only job with packages: write.
+#                  full-SHA tag. CycloneDX SBOMs are uploaded as run artifacts.
+#                  The only job with packages: write.
 #     deploy-test  only after "Images result" and a real publication ("on"),
 #                  on the self-hosted runner of the test VM: asks the wrapper
 #                  deploy/vm/aquaops-deploy to deploy this exact commit (pull,
 #                  up, wait-healthy, smoke test, NFR-08 time).
 #
 # Trivy (SCRUM-63 / NFR-16, E4): each image is loaded into the job and scanned
-# before anything could be pushed. BLOCKING (TRIVY_EXIT_CODE '1'): a fixable
-# CRITICAL vulnerability fails the build; HIGH is reported only.
+# before anything could be pushed. A CycloneDX SBOM is generated and verified
+# for each exact image before it is exported. BLOCKING (TRIVY_EXIT_CODE '1'):
+# a fixable CRITICAL vulnerability fails the build; HIGH is reported only.
 # Accepted exceptions: deploy/trivy/.trivyignore (one line + reason each).
 # Actions are pinned to a commit SHA; the comment gives the release tag.
 # =============================================================================
@@ -183,6 +188,40 @@ jobs:
           ignore-unfixed: true
           trivyignores: deploy/trivy/.trivyignore
 
+      # Generate a CycloneDX SBOM for the exact local image that passed the gate.
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
+          format: cyclonedx
+          output: sbom-${{ matrix.image }}.cdx.json
+          version: 'v0.76.2'
+
+      - name: Verify CycloneDX SBOM
+        env:
+          SBOM: sbom-${{ matrix.image }}.cdx.json
+          IMAGE_REF: ${{ env.IMAGE_NAMESPACE }}/${{ matrix.image }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -s "$SBOM" || { echo "::error::CycloneDX SBOM is missing or empty"; exit 1; }
+          jq -e --arg image "$IMAGE_REF" '
+            .bomFormat == "CycloneDX" and
+            (.specVersion | type == "string" and length > 0) and
+            .metadata.component.type == "container" and
+            ([.metadata.component.properties[]?
+              | select(.name == "aquasecurity:trivy:RepoTag" and .value == $image)]
+              | length == 1) and
+            (.components | type == "array" and length > 0)
+          ' "$SBOM" > /dev/null
+
+      - name: Upload CycloneDX SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: sbom-${{ matrix.image }}-cyclonedx
+          path: sbom-${{ matrix.image }}.cdx.json
+          if-no-files-found: error
+          retention-days: 90
+
       # GHCR (E5): hand the image Trivy just scanned to the publish job, with
       # its identity (image ID + layers). After the gate: a failed scan stops
       # the job before this step. Skipped entirely while GHCR_PUBLISH is off.
@@ -294,6 +333,39 @@ jobs:
           exit-code: ${{ env.TRIVY_EXIT_CODE }}
           ignore-unfixed: true
           trivyignores: deploy/trivy/.trivyignore
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
+          format: cyclonedx
+          output: sbom-frontend.cdx.json
+          version: 'v0.76.2'
+
+      - name: Verify CycloneDX SBOM
+        env:
+          SBOM: sbom-frontend.cdx.json
+          IMAGE_REF: ${{ env.IMAGE_NAMESPACE }}/frontend:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -s "$SBOM" || { echo "::error::CycloneDX SBOM is missing or empty"; exit 1; }
+          jq -e --arg image "$IMAGE_REF" '
+            .bomFormat == "CycloneDX" and
+            (.specVersion | type == "string" and length > 0) and
+            .metadata.component.type == "container" and
+            ([.metadata.component.properties[]?
+              | select(.name == "aquasecurity:trivy:RepoTag" and .value == $image)]
+              | length == 1) and
+            (.components | type == "array" and length > 0)
+          ' "$SBOM" > /dev/null
+
+      - name: Upload CycloneDX SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: sbom-frontend-cyclonedx
+          path: sbom-frontend.cdx.json
+          if-no-files-found: error
+          retention-days: 90
 
       # GHCR (E5): same export as the Java images, after the Trivy gate.
       - name: Export scanned image

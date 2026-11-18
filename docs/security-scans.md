@@ -12,8 +12,23 @@ privilégié (`k3s-deploy.yml`, runner auto-hébergé).
 | `iac` | Checkov 3.4.0 | `deploy/terraform` (ressources `kubernetes_*`, que Trivy ne sait pas analyser) et `deploy/k8s` | liste `CHECKOV_HARD_FAIL` (ci-dessous) | `iac-reports/iac-checkov.sarif` + journal du job |
 | `sca-trivy` | Trivy rootfs 0.76.2 | les **8 jars** Spring Boot (exactement ce que livrent les images), base Java de Trivy (avis GitHub) | **CRITICAL corrigeable** | `sca-trivy/sca-trivy.{json,txt}` (HIGH et CRITICAL) |
 | `sca-owasp` | OWASP Dependency-Check 13.0.0 (plugin Maven) | les 8 services, base NVD | **CVSS ≥ 9** (= CRITICAL) | `sca-dependency-check/<service>/dependency-check-report.{html,json}` |
+| `build-java`, `build-frontend` | Trivy 0.76.2, format CycloneDX | les 8 images applicatives construites pour le commit | Échec de génération ou de validation du SBOM | `sbom-<image>-cyclonedx` (JSON, 90 jours) |
 
-Outils figés par **version et empreinte** (`sha256`), actions par SHA de commit.
+Dans le workflow Security, outils figés par **version et empreinte** (`sha256`)
+et actions par SHA de commit. Dans le workflow Images, l'action Trivy est
+également épinglée par SHA et l'exécutable par version (`v0.76.2`).
+
+## SBOM CycloneDX des images
+
+Sur chaque push vers `main`, `publish.yml` génère un SBOM CycloneDX JSON pour
+chacune des 7 images Java et l'image frontend, à partir de l'image locale exacte
+qui vient de passer le contrôle Trivy. Le pipeline vérifie le format CycloneDX,
+la référence de l'image dans les métadonnées et la présence de composants;
+l'absence ou l'invalidité d'un SBOM fait échouer le job de construction.
+
+Les huit artefacts `sbom-<image>-cyclonedx` sont téléchargeables depuis
+l'exécution GitHub Actions correspondante pendant **90 jours**. Ils ne sont pas
+publiés comme références OCI dans GHCR.
 
 ## Pourquoi deux outils pour l'IaC
 
