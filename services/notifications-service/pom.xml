@@ -68,6 +68,11 @@
                         <artifactId>postgresql</artifactId>
                         <scope>runtime</scope>
                 </dependency>
+                <!-- Metriques Prometheus (SCRUM-57 : dashboards Grafana d'E6), exposees sur /actuator/prometheus. -->
+                <dependency>
+                        <groupId>io.micrometer</groupId>
+                        <artifactId>micrometer-registry-prometheus</artifactId>
+                </dependency>
                 <!-- Exigence de l'enseignant : inscription dans Eureka (desactive par defaut, voir application.yml). -->
                 <dependency>
                         <groupId>org.springframework.cloud</groupId>
