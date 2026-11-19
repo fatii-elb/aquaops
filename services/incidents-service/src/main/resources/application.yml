@@ -26,7 +26,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info,prometheus
 
 # Eureka. Desactive tant que EUREKA_ENABLED n'est pas "true" : sans serveur, le service demarre normalement.
 # Delais courts : un service arrete disparait du registre en moins de 45 s (NFR-05).
