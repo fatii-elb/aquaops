@@ -1,0 +1,30 @@
+# Test du runner auto-heberge de la VM de test. Carte SCRUM-55 / NFR-08 · E5
+# Lancement manuel uniquement (onglet Actions > Runner smoke test > Run workflow).
+# Verifie que le runner "aquaops-test" prend un job et l'execute. Commandes
+# inoffensives : aucun checkout, aucun Docker, aucun sudo, aucun secret, aucun
+# deploiement.
+name: Runner smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Runner smoke test
+    runs-on: [self-hosted, linux, x64, aquaops-test]
+    timeout-minutes: 5
+    steps:
+      - name: Identity and system
+        run: |
+          whoami
+          id
+          uname -a
+
+      - name: Connectivity to GitHub (anonymous HTTPS request)
+        run: |
+          code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 https://api.github.com)"
+          echo "https://api.github.com -> HTTP $code"
+          [ "$code" = "200" ]
