@@ -2,12 +2,18 @@
 # AquaOps image pipeline on main: test the exact commit, then build the images.
 # Card SCRUM-55 / NFR-08 · E5
 #
-# Publication to GHCR and deployment to the test VM are ON (GHCR_PUBLISH and
-# DEPLOY_TEST below). Both require Trivy to block CRITICAL vulnerabilities
+# Publication to GHCR is ON, deployment to the test VM is OFF (GHCR_PUBLISH
+# and DEPLOY_TEST below). Both require Trivy to block CRITICAL vulnerabilities
 # (TRIVY_EXIT_CODE '1', decision of E4): the "publish-policy" job refuses
 # otherwise, and so does the deployment wrapper on the VM.
 #
-#   push to main (commit S)
+# Triggers: every push to main, and by hand (Actions > Images > Run workflow,
+# branch main) to publish the images of the CURRENT tip of main, for instance
+# after the workflow was disabled. A manual run from any other branch is
+# refused by publish-policy (nothing is published), and deploy-test never
+# runs on a manual run (it requires a push event).
+#
+#   push to main, or manual run on main (commit S)
 #     ci           the CI workflow (ci.yml) on S: Java, PostgreSQL, Angular
 #     gitleaks     the Gitleaks workflow (gitleaks.yml, E3) on S, in parallel
 #                  with ci: the security gate, no image is built without it
@@ -45,6 +51,9 @@ name: Images
 on:
   push:
     branches: [main]
+  # Manual publication of the tip of main (no input: the commit is always the
+  # one the run starts on, tagged with its full SHA as for a push).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -417,7 +426,22 @@ jobs:
     steps:
       - name: Check GHCR_PUBLISH and DEPLOY_TEST against TRIVY_EXIT_CODE
         id: policy
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
         run: |
+          # Only main of this repository is ever published: a manual run
+          # started on another branch fails here, so publish (and therefore
+          # deploy-test) never runs for it.
+          case "$EVENT" in
+            push|workflow_dispatch) ;;
+            *) echo "::error::unexpected event [$EVENT]: nothing is published"; exit 1 ;;
+          esac
+          if [ "$REF" != "refs/heads/main" ] || [ "$REPO" != "fatii-elb/aquaops" ]; then
+            echo "::error::images are published from main of fatii-elb/aquaops only (got $REPO $REF): nothing is published"
+            exit 1
+          fi
           case "$GHCR_PUBLISH" in
             off|dry-run)
               mode="$GHCR_PUBLISH" ;;
@@ -446,7 +470,7 @@ jobs:
           esac
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
-          echo "GHCR publication mode: $mode, test deployment: $deploy (TRIVY_EXIT_CODE=$TRIVY_EXIT_CODE)"
+          echo "GHCR publication mode: $mode, test deployment: $deploy (TRIVY_EXIT_CODE=$TRIVY_EXIT_CODE, event $EVENT)"
 
   # ---------------------------------------------------------------------------
   # Publication of the 8 SCANNED images. No checkout, no rebuild, no scanner:
