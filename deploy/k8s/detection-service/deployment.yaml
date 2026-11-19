@@ -37,6 +37,11 @@ spec:
         runAsNonRoot: true
       containers:
         - name: detection-service
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           # Le tag est fixe par le pipeline (kustomize : voir kustomization.yaml). Jamais « latest ».
           image: ghcr.io/fatii-elb/aquaops/detection-service:REPLACE_WITH_COMMIT_SHA
           imagePullPolicy: IfNotPresent
