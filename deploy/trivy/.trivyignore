@@ -4,3 +4,6 @@
 #
 # Exemple (ne pas decommenter sans raison) :
 # CVE-2099-12345   # pas de correctif, non exploitable chez nous parce que ..., revue le 2026-12-01
+CVE-2026-121810   # HTTP/3 non active, correctif 1.30.7 pas encore publie dans l'image, valide par Oumaima, revue le 2026-11-26
+CVE-2026-123007   # HTTP/2 non active, idem, valide par Oumaima, revue le 2026-11-26
+CVE-2026-123633   # HTTP/2 non active, idem, valide par Oumaima, revue le 2026-11-26
