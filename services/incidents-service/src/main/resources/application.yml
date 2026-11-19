@@ -27,3 +27,16 @@ management:
     web:
       exposure:
         include: health
+
+# Eureka. Desactive tant que EUREKA_ENABLED n'est pas "true" : sans serveur, le service demarre normalement.
+# Delais courts : un service arrete disparait du registre en moins de 45 s (NFR-05).
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:false}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 5
+  instance:
+    # Dans Kubernetes chaque pod a sa propre adresse IP : on s'inscrit par IP, avec un identifiant unique par pod.
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${spring.cloud.client.ip-address}:${server.port}
