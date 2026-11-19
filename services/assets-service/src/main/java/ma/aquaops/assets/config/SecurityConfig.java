@@ -28,6 +28,8 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/actuator/health/**").permitAll()
+                // NFR-10 : Prometheus lit les metriques sans jeton.
+                .requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()
                 // Audit AVANT la regle generale GET : lecture seule, jamais d'ecriture par l'API.
                 .requestMatchers(HttpMethod.GET, "/api/assets/audit/**").hasAnyRole(AUDIT)
                 .requestMatchers("/api/assets/audit/**").denyAll()
