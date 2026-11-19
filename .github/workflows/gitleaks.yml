@@ -9,6 +9,8 @@ on:
   # Appelable par le workflow Images (publish.yml, E5) : aucune image n'est
   # construite si ce scan echoue sur le meme commit. Appele depuis un push sur
   # main, github.event_name vaut "push" : le scan porte sur before..after.
+  # Appele depuis un lancement manuel d'Images (workflow_dispatch), il n'y a
+  # pas de "before" : tout l'historique est analyse.
   workflow_call:
 
 permissions:
@@ -42,8 +44,13 @@ jobs:
           PUSH_AFTER: ${{ github.sha }}
         run: |
           if [ "$EVENT" = "pull_request" ]; then
-            RANGE="${PR_BASE}..${PR_HEAD}"
+            ./gitleaks detect --source . --config .gitleaks.toml --redact -v --log-opts="${PR_BASE}..${PR_HEAD}"
+          elif [[ "$PUSH_BEFORE" =~ ^[0-9a-f]{40}$ ]] && [[ ! "$PUSH_BEFORE" =~ ^0+$ ]]; then
+            ./gitleaks detect --source . --config .gitleaks.toml --redact -v --log-opts="${PUSH_BEFORE}..${PUSH_AFTER}"
           else
-            RANGE="${PUSH_BEFORE}..${PUSH_AFTER}"
+            # No usable "before" commit: manual run of the Images workflow
+            # (workflow_dispatch) or first push of a branch. "..<sha>" would
+            # scan 0 commits and pass: scan the whole history instead.
+            echo "No previous commit for event $EVENT: scanning the whole history"
+            ./gitleaks detect --source . --config .gitleaks.toml --redact -v
           fi
-          ./gitleaks detect --source . --config .gitleaks.toml --redact -v --log-opts="$RANGE"
