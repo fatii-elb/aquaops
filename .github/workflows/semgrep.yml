@@ -1,0 +1,68 @@
+# Analyse statique du code (SAST) avec Semgrep. [TECH] Semgrep · E3 · Sprint 5
+# Java et Spring Boot : rulesets p/java (dont les regles Spring), p/owasp-top-ten et p/security-audit.
+# S'execute a chaque pull request vers main ; le rapport complet est publie en artefact et toute
+# constatation de gravite elevee (ERROR) fait echouer le job. Semgrep, pas SonarQube (planning du Sprint 5).
+name: Semgrep
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # Appelable par le workflow Images (publish.yml, E5), comme Gitleaks.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Semgrep (SAST)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Version epinglee : a mettre a jour volontairement (comme GITLEAKS_VERSION dans gitleaks.yml).
+      - name: Install Semgrep
+        env:
+          SEMGREP_VERSION: 1.100.0
+        run: |
+          python3 -m venv "$RUNNER_TEMP/semgrep-venv"
+          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --quiet "setuptools==80.9.0" "semgrep==${SEMGREP_VERSION}"
+          echo "$RUNNER_TEMP/semgrep-venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/semgrep-venv/bin/semgrep" --version
+
+      # Rapport complet (toutes gravites) : le job ne bloque pas ici, il bloque a l'etape suivante.
+      - name: Scan the Java services
+        env:
+          SEMGREP_SEND_METRICS: "off"
+        run: |
+          semgrep scan \
+            --config p/java \
+            --config p/owasp-top-ten \
+            --config p/security-audit \
+            --metrics=off \
+            --exclude node_modules --exclude target --exclude dist \
+            --exclude '**/src/test/**' \
+            --json-output=semgrep-report.json \
+            --sarif-output=semgrep-report.sarif \
+            --text-output=semgrep-report.txt \
+            services
+
+      - name: Fail on high severity findings
+        run: python3 .github/scripts/semgrep_gate.py semgrep-report.json
+
+      - name: Upload the Semgrep report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: semgrep-report
+          path: |
+            semgrep-report.json
+            semgrep-report.sarif
+            semgrep-report.txt
+          if-no-files-found: error
+          retention-days: 30

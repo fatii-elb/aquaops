@@ -26,7 +26,11 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(a -> a
                 .requestMatchers("/actuator/health/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/detection/anomalies", "/api/detection/anomalies/**").hasAnyRole(TOUS)
+                // Seuils par zone (FR-13) : lecture pour tous, modification reservee a l'administrateur
+                .requestMatchers(HttpMethod.GET, "/api/detection/thresholds", "/api/detection/thresholds/**").hasAnyRole(TOUS)
+                .requestMatchers(HttpMethod.PUT, "/api/detection/thresholds/**").hasRole("administrateur")
                 .anyRequest().denyAll())
             .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(jwtConverter)));
         return http.build();

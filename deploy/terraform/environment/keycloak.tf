@@ -39,6 +39,7 @@ resource "kubernetes_service_v1" "keycloak" {
 }
 
 resource "kubernetes_deployment_v1" "keycloak" {
+  #checkov:skip=CKV_K8S_22:Accepted for test-only start-dev: Keycloak writes to /opt/keycloak; see deploy/terraform/README.md section 7.
   count = local.infra
 
   metadata {

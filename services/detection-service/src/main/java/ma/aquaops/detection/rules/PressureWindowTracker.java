@@ -8,11 +8,14 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.IntFunction;
+import java.util.function.IntToDoubleFunction;
 
 public class PressureWindowTracker {
 
-    private final double minPressure;
-    private final Duration window;
+    // Seuil et duree propres a chaque zone (FR-13) : relus a chaque mesure
+    private final IntToDoubleFunction minPressureByZone;
+    private final IntFunction<Duration> windowByZone;
 
     private final Map<Integer, ZoneState> states =
             new HashMap<>();
@@ -33,8 +36,17 @@ public class PressureWindowTracker {
                     "Invalid pressure configuration");
         }
 
-        this.minPressure = minPressure;
-        this.window = window;
+        this.minPressureByZone = zone -> minPressure;
+        this.windowByZone = zone -> window;
+    }
+
+    // Seuils differents selon la zone, modifiables sans redemarrage (FR-13)
+    public PressureWindowTracker(
+            IntToDoubleFunction minPressureByZone,
+            IntFunction<Duration> windowByZone) {
+
+        this.minPressureByZone = Objects.requireNonNull(minPressureByZone);
+        this.windowByZone = Objects.requireNonNull(windowByZone);
     }
 
     public synchronized boolean update(
@@ -60,7 +72,7 @@ public class PressureWindowTracker {
 
         Instant lowSince = null;
 
-        if (value < minPressure) {
+        if (value < minPressureByZone.applyAsDouble(zone)) {
             lowSince = previous != null
                     && previous.lowSince() != null
                     ? previous.lowSince()
@@ -71,6 +83,6 @@ public class PressureWindowTracker {
 
         return lowSince != null &&
                 Duration.between(lowSince, time)
-                        .compareTo(window) >= 0;
+                        .compareTo(windowByZone.apply(zone)) >= 0;
     }
 }
