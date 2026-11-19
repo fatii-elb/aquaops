@@ -158,9 +158,14 @@ services:
     image: aquaops/detection:dev
     build: { <<: *java-build, context: ../../services/detection-service }
     environment:
+      <<: *db-credentials
+      DETECTION_DB_URL: jdbc:postgresql://postgres:5432/aquaops_detection
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:-http://keycloak:8180/realms/aquaops}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
+      postgres: { condition: service_healthy }
       kafka: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8083/actuator/health"]
       interval: 10s

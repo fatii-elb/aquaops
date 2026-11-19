@@ -15,6 +15,7 @@ import { MockAnomalyDataSource } from './features/anomalies/mock-anomaly-data-so
 import { AssetsPage } from './features/assets/assets-page/assets-page';
 import { ComingSoon } from './features/placeholder/coming-soon';
 import { AnomaliesPage } from './features/anomalies/anomalies-page';
+import { ThresholdsPage } from './features/thresholds/thresholds-page';
 import { ApiReportsDataSource } from './features/reports/api-reports-data-source';
 import { MockReportsDataSource } from './features/reports/mock-reports-data-source';
 import { REPORTS_DATA_SOURCE_CONFIG, ReportsDataSource } from './features/reports/reports-data-source';
@@ -53,6 +54,7 @@ export const routes: Routes = [
     canActivate: [roleGuard('superviseur', 'administrateur')],
     providers: [{ provide: ServiceStatusDataSource, useClass: MockServiceStatusDataSource }],
   },
+  { path: 'thresholds', component: ThresholdsPage, canActivate: [roleGuard('administrateur')] },
   { path: 'administration', component: Administration, canActivate: [roleGuard('administrateur')] },
   { path: 'audit', component: Audit, canActivate: [roleGuard('superviseur', 'administrateur')] },
   {

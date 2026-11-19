@@ -4,6 +4,7 @@ package ma.aquaops.detection.engine;
 import ma.aquaops.detection.model.Anomaly;
 import ma.aquaops.detection.model.SensorReading;
 import ma.aquaops.detection.rules.LeakRule;
+import ma.aquaops.detection.rules.LowLevelRule;
 import ma.aquaops.detection.rules.Rule;
 
 import org.slf4j.Logger;
@@ -95,6 +96,16 @@ public class DetectionEngine {
                         deduplicator.recover(
                                 reading.zoneId(),
                                 "LEAK_SUSPECTED"));
+            }
+
+            // ETAPE 3 bis : Retour a la normale d'un niveau bas (FR-12)
+            if (rule instanceof LowLevelRule lowLevelRule
+                    && lowLevelRule.confirmsRecovery(reading)) {
+
+                notifyRecovered(reading.zoneId(), LowLevelRule.TYPE,
+                        deduplicator.recover(
+                                reading.zoneId(),
+                                LowLevelRule.TYPE));
             }
 
             // ETAPE 4 : Supprimer les anomalies repetees

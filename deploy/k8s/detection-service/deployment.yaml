@@ -1,0 +1,97 @@
+# Deploiement du service de detection avec mise a jour progressive sans interruption (NFR-07, RC-06).
+#
+# Principe : un nouveau pod est cree (maxSurge) et doit etre PRET avant qu'un ancien soit retire
+# (maxUnavailable: 0). Un pod qui s'arrete cesse d'abord de recevoir du trafic (preStop), puis termine ses
+# requetes en cours (arret gracieux de Spring Boot), puis s'arrete.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: detection-service
+  namespace: aquaops
+  labels:
+    app.kubernetes.io/name: detection-service
+    app.kubernetes.io/part-of: aquaops
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  # Un pod doit rester pret 10 s avant d'etre compte comme disponible : on ne retire pas l'ancien trop vite
+  minReadySeconds: 10
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: detection-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: detection-service
+        app.kubernetes.io/part-of: aquaops
+    spec:
+      # preStop (20 s) + arret gracieux (SHUTDOWN_TIMEOUT 30 s) + marge : 60 s
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: detection-service
+          # Le tag est fixe par le pipeline (kustomize : voir kustomization.yaml). Jamais « latest ».
+          image: ghcr.io/fatii-elb/aquaops/detection-service:REPLACE_WITH_COMMIT_SHA
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+          envFrom:
+            - configMapRef:
+                name: detection-service-config
+          env:
+            # Secret cree par E5 / Terraform (variables Terraform, jamais en clair dans le depot)
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: aquaops-db-credentials
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aquaops-db-credentials
+                  key: password
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          # Demarrage lent de la JVM : on laisse jusqu'a 3 minutes avant de considerer l'echec
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+            timeoutSeconds: 3
+          # Disponibilite : un pod non pret ne recoit pas de trafic et bloque la mise a jour
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+            timeoutSeconds: 3
+          # Vivacite : redemarrage automatique si la JVM est bloquee
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 3
+          lifecycle:
+            preStop:
+              # Laisse le temps au retrait du pod des Services, du registre Eureka et du cache du repartiteur de
+              # charge de la passerelle avant l'arret : le pod ne recoit plus de requetes quand il s'arrete.
+              exec:
+                command: ["sleep", "20"]

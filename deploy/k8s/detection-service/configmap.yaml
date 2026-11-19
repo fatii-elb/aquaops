@@ -1,0 +1,22 @@
+# Configuration non secrete du service de detection. Les identifiants de base de donnees viennent d'un Secret
+# (voir deployment.yaml) : aucun secret dans ce depot.
+# Les adresses ci-dessous sont celles du Docker Compose de la plateforme ; E5 les aligne sur les noms de Service
+# reels de son Terraform / ses charts.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: detection-service-config
+  namespace: aquaops
+  labels:
+    app.kubernetes.io/name: detection-service
+    app.kubernetes.io/part-of: aquaops
+data:
+  DETECTION_PORT: "8083"
+  # Doit rester inferieur a terminationGracePeriodSeconds - duree du preStop (voir deployment.yaml)
+  SHUTDOWN_TIMEOUT: "30s"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  DETECTION_DB_URL: "jdbc:postgresql://postgres:5432/aquaops_detection"
+  KEYCLOAK_ISSUER_URI: "http://keycloak:8180/realms/aquaops"
+  # Adresse complete du registre, terminee par /eureka
+  EUREKA_URL: "http://eureka:8761/eureka"
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"

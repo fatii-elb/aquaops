@@ -1,0 +1,10 @@
+# kubectl apply -k deploy/k8s/detection-service
+# Le pipeline fixe le tag de l'image : kustomize edit set image ghcr.io/fatii-elb/aquaops/detection-service=ghcr.io/fatii-elb/aquaops/detection-service:<sha>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: aquaops
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml

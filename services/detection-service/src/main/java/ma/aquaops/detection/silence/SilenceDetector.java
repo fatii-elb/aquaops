@@ -4,6 +4,7 @@ import ma.aquaops.detection.engine.AnomalyRecoveryListener;
 import ma.aquaops.detection.kafka.AnomalyPublisher;
 import ma.aquaops.detection.model.Anomaly;
 import ma.aquaops.detection.model.SensorReading;
+import ma.aquaops.detection.threshold.ThresholdProvider;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +41,9 @@ public class SilenceDetector {
 
     // Facultatif : prevenu quand un capteur silencieux reprend (BE-1)
     private AnomalyRecoveryListener recoveryListener;
+
+    // Facultatif : seuil de silence propre a chaque zone (FR-13)
+    private ThresholdProvider thresholds;
 
     public SilenceDetector(
             Clock clock,
@@ -82,6 +86,21 @@ public class SilenceDetector {
         this.recoveryListener = listener;
     }
 
+    @Autowired(required = false)
+    public synchronized void setThresholds(ThresholdProvider thresholds) {
+
+        this.thresholds = thresholds;
+    }
+
+    // Seuil de la zone si les seuils par zone sont disponibles, sinon seuil global
+    private Duration thresholdFor(Integer zoneId) {
+        if (thresholds != null && zoneId != null) {
+            return Duration.ofSeconds(
+                    thresholds.forZone(zoneId).silenceThresholdSeconds());
+        }
+        return threshold;
+    }
+
     @Scheduled(fixedRateString = "${silence.check-interval-ms:1000}")
     public void check() {
         collectSilentSensors().forEach(publisher::publish);
@@ -95,7 +114,7 @@ public class SilenceDetector {
         for (Map.Entry<Integer, SensorState> entry : sensors.entrySet()) {
             SensorState state = entry.getValue();
             boolean expired = Duration.between(state.receivedAt(), now)
-                    .compareTo(threshold) >= 0;
+                    .compareTo(thresholdFor(state.zoneId())) >= 0;
 
             if (!state.silent() && expired) {
                 entry.setValue(new SensorState(

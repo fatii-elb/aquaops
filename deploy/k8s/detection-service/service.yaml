@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: detection-service
+  namespace: aquaops
+  labels:
+    app.kubernetes.io/name: detection-service
+    app.kubernetes.io/part-of: aquaops
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: detection-service
+  ports:
+    - name: http
+      port: 8083
+      targetPort: http

@@ -1,0 +1,118 @@
+<app-shell title="Seuils par zone" active="thresholds">
+  <div class="flex flex-col gap-space-xl p-space-xl lg:p-space-2xl">
+
+    <!-- En-tête -->
+    <section class="flex flex-col justify-between gap-space-lg rounded-xl bg-surface-container-lowest p-space-xl shadow-sm lg:flex-row lg:items-center">
+      <div class="flex min-w-0 flex-col gap-space-2xs">
+        <span class="flex w-fit items-center gap-space-2xs rounded-full bg-primary-fixed px-space-sm py-space-2xs font-label-sm text-label-sm font-bold uppercase tracking-wider text-on-primary-fixed-variant">
+          <span class="material-symbols-outlined text-[14px]">tune</span>
+          Détection
+        </span>
+        <h1 class="font-display-md text-display-md tracking-tight text-on-surface">Seuils par zone</h1>
+        <p class="max-w-3xl font-body-md text-body-md text-on-surface-variant">
+          Réglez les seuils de détection de chaque zone. Une modification est appliquée par le moteur de détection sans redéploiement,
+          sous 15 s (30 s au plus).
+        </p>
+      </div>
+      <button type="button" data-testid="refresh" (click)="load()" [disabled]="loading()"
+        class="flex shrink-0 items-center gap-space-xs rounded-lg bg-surface-container-low px-space-md py-space-sm font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container disabled:opacity-60">
+        <span class="material-symbols-outlined text-[18px] {{ loading() ? 'animate-spin' : '' }}">refresh</span>
+        Actualiser
+      </button>
+    </section>
+
+    <!-- Valeurs par défaut -->
+    @if (response(); as data) {
+      <section class="rounded-xl bg-surface-container-lowest p-space-xl shadow-sm" aria-label="Valeurs par défaut" data-testid="defaults">
+        <h2 class="mb-space-sm font-headline-md text-headline-md text-on-surface">Valeurs par défaut</h2>
+        <p class="mb-space-md font-body-md text-body-md text-on-surface-variant">Appliquées aux zones dont les seuils n'ont pas été personnalisés.</p>
+        <dl class="grid grid-cols-2 gap-space-lg md:grid-cols-3 xl:grid-cols-5">
+          @for (f of fields; track f.key) {
+            <div class="flex flex-col gap-space-2xs rounded-lg bg-surface-container-low p-space-md">
+              <dt class="font-label-sm text-label-sm text-secondary">{{ f.label }}</dt>
+              <dd class="font-mono-telemetry text-mono-telemetry text-on-surface">{{ format(f, data.defaults[f.key]) }}</dd>
+            </div>
+          }
+        </dl>
+      </section>
+    }
+
+    <!-- Seuils par zone -->
+    <section class="flex flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-sm">
+      <div class="px-space-xl pt-space-xl">
+        <h2 class="font-headline-md text-headline-md text-on-surface">Zones</h2>
+      </div>
+      <div class="mt-space-lg">
+        @if (error(); as err) {
+          <app-state-block kind="error" [message]="err.message" [retryable]="err.retryable" (retry)="load()" />
+        } @else if (!response()) {
+          <app-state-block kind="loading" />
+        } @else if (rows().length === 0) {
+          <app-state-block kind="empty" icon="map" title="Aucune zone"
+            message="Aucune zone n'est enregistrée dans le service des actifs. Créez d'abord une zone dans « Réseau & Actifs »." />
+        } @else {
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-left" aria-label="Seuils de détection par zone">
+              <thead class="bg-surface-container-low">
+                <tr>
+                  <th scope="col" class="whitespace-nowrap px-space-xl py-space-md font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Zone</th>
+                  @for (f of fields; track f.key) {
+                    <th scope="col" class="whitespace-nowrap px-space-lg py-space-md text-right font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">{{ f.label }}</th>
+                  }
+                  <th scope="col" class="whitespace-nowrap px-space-lg py-space-md font-label-sm text-label-sm font-bold uppercase tracking-wider text-secondary">Statut</th>
+                  <th scope="col" class="px-space-xl py-space-md"><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rows(); track row.zoneId) {
+                  <tr [attr.data-zone]="row.zoneId" class="border-t border-outline-variant/30 transition-colors hover:bg-surface-container-low">
+                    <td class="whitespace-nowrap px-space-xl py-space-md font-label-md text-label-md font-semibold text-on-surface">{{ row.name }}</td>
+                    @for (f of fields; track f.key) {
+                      <td class="whitespace-nowrap px-space-lg py-space-md text-right font-mono-telemetry text-mono-telemetry text-on-surface-variant" [attr.data-col]="f.key">{{ format(f, row.thresholds[f.key]) }}</td>
+                    }
+                    <td class="whitespace-nowrap px-space-lg py-space-md">
+                      @if (row.custom) {
+                        <span class="rounded-full bg-primary-fixed px-space-sm py-space-2xs font-label-sm text-label-sm font-semibold text-on-primary-fixed-variant"
+                          [attr.title]="'Modifié le ' + date(row.updatedAt) + (row.updatedBy ? ' par ' + row.updatedBy : '')" data-testid="status-custom">Personnalisé</span>
+                      } @else {
+                        <span class="rounded-full bg-surface-container-high px-space-sm py-space-2xs font-label-sm text-label-sm font-semibold text-on-surface-variant" data-testid="status-default">Par défaut</span>
+                      }
+                    </td>
+                    <td class="whitespace-nowrap px-space-xl py-space-md text-right">
+                      @if (canWrite) {
+                        <button type="button" data-action="edit" [attr.aria-label]="'Modifier les seuils de ' + row.name" (click)="edit(row)"
+                          class="rounded-lg p-space-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary">
+                          <span class="material-symbols-outlined text-[20px]">edit</span>
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </section>
+  </div>
+</app-shell>
+
+@if (canWrite) {
+  @if (editing(); as row) {
+    <app-threshold-form [zoneName]="row.name" [initial]="row.thresholds" [saving]="saving()"
+      [serverErrors]="serverErrors()" [formError]="formError()" (submitted)="save($event)" (cancelled)="closeForm()" />
+  }
+}
+
+@if (toast(); as t) {
+  <div class="pointer-events-none fixed bottom-space-xl left-1/2 z-[70] -translate-x-1/2 px-space-md">
+    <div role="status" aria-live="polite" data-testid="toast"
+      class="pointer-events-auto flex max-w-xl items-center gap-space-sm rounded-xl px-space-lg py-space-md shadow-xl {{ t.kind === 'success' ? 'bg-inverse-surface text-inverse-on-surface' : 'bg-error-container text-on-error-container' }}">
+      <span class="material-symbols-outlined text-[20px] {{ t.kind === 'success' ? 'text-tertiary-fixed-dim' : '' }}">{{ t.kind === 'success' ? 'check_circle' : 'error' }}</span>
+      <p class="font-label-md text-label-md">{{ t.text }}</p>
+      <button type="button" (click)="dismissToast()" aria-label="Fermer la notification" class="rounded p-space-2xs opacity-70 hover:opacity-100">
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+  </div>
+}

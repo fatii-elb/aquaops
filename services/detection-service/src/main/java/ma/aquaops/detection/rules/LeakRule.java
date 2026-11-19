@@ -3,6 +3,7 @@ package ma.aquaops.detection.rules;
 
 import ma.aquaops.detection.model.Anomaly;
 import ma.aquaops.detection.model.SensorReading;
+import ma.aquaops.detection.threshold.ThresholdProvider;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.IntToDoubleFunction;
 
 public class LeakRule implements Rule {
 
@@ -20,8 +22,9 @@ public class LeakRule implements Rule {
             Duration.ofSeconds(30);
 
     private final PressureWindowTracker pressureTracker;
-    private final double minPressure;
-    private final double maxFlow;
+    // Seuils relus a chaque mesure : propres a chaque zone (FR-13)
+    private final IntToDoubleFunction minPressureByZone;
+    private final IntToDoubleFunction maxFlowByZone;
     private final Clock clock;
 
     private final Map<Integer, Boolean> lowPressure =
@@ -57,8 +60,23 @@ public class LeakRule implements Rule {
         this.pressureTracker = new PressureWindowTracker(
                 minPressure, pressureDuration);
 
-        this.minPressure = minPressure;
-        this.maxFlow = maxFlow;
+        this.minPressureByZone = zone -> minPressure;
+        this.maxFlowByZone = zone -> maxFlow;
+        this.clock = Objects.requireNonNull(clock);
+    }
+
+    // Seuils par zone, modifiables sans redemarrage (FR-13)
+    public LeakRule(ThresholdProvider thresholds, Clock clock) {
+
+        Objects.requireNonNull(thresholds);
+        this.minPressureByZone =
+                zone -> thresholds.forZone(zone).leakMinPressure();
+        this.maxFlowByZone =
+                zone -> thresholds.forZone(zone).leakMaxFlow();
+        this.pressureTracker = new PressureWindowTracker(
+                this.minPressureByZone,
+                zone -> Duration.ofSeconds(
+                        thresholds.forZone(zone).leakDurationSeconds()));
         this.clock = Objects.requireNonNull(clock);
     }
 
@@ -117,7 +135,7 @@ public class LeakRule implements Rule {
             lastFlow.put(zone, time);
             lastFlowValue.put(zone, value);
 
-            highFlow.put(zone, value > maxFlow);
+            highFlow.put(zone, value > maxFlowByZone.applyAsDouble(zone));
         }
 
         // ETAPE 3 : Les deux conditions doivent etre vraies
@@ -180,7 +198,7 @@ public class LeakRule implements Rule {
         // La pression est redevenue normale
         if ("PRESSURE".equals(reading.type())) {
 
-            return value >= minPressure
+            return value >= minPressureByZone.applyAsDouble(zone)
                     && time.equals(lastPressure.get(zone))
                     && Objects.equals(
                             value,
@@ -191,7 +209,7 @@ public class LeakRule implements Rule {
         // Le debit est redevenu normal
         if ("FLOW".equals(reading.type())) {
 
-            return value <= maxFlow
+            return value <= maxFlowByZone.applyAsDouble(zone)
                     && time.equals(lastFlow.get(zone))
                     && Objects.equals(
                             value,

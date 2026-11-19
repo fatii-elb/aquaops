@@ -4,16 +4,16 @@ package ma.aquaops.detection.config;
 import ma.aquaops.detection.engine.AnomalyRecoveryListener;
 import ma.aquaops.detection.engine.DetectionEngine;
 import ma.aquaops.detection.rules.LeakRule;
+import ma.aquaops.detection.rules.LowLevelRule;
 import ma.aquaops.detection.rules.PumpFaultRule;
 import ma.aquaops.detection.rules.Rule;
+import ma.aquaops.detection.threshold.ThresholdProvider;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.util.List;
 
 @Configuration
@@ -32,19 +32,19 @@ public class DetectionConfig {
     @Bean
     public LeakRule leakRule(
             Clock clock,
-            @Value("${detection.leak.min-pressure}")
-            double minPressure,
-            @Value("${detection.leak.max-flow}")
-            double maxFlow,
-            @Value("${detection.leak.duration-seconds}")
-            long durationSeconds) {
+            ThresholdProvider thresholds) {
 
-        return new LeakRule(
-                minPressure,
-                maxFlow,
-                Duration.ofSeconds(durationSeconds),
-                clock
-        );
+        // Seuils par zone (FR-13), recharges sans redemarrage
+        return new LeakRule(thresholds, clock);
+    }
+
+    @Bean
+    public LowLevelRule lowLevelRule(
+            Clock clock,
+            ThresholdProvider thresholds) {
+
+        // Niveau de reservoir bas (FR-12)
+        return new LowLevelRule(thresholds, clock);
     }
 
     @Bean
