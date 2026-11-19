@@ -24,6 +24,8 @@ resource "kubernetes_service_v1" "eureka" {
 }
 
 resource "kubernetes_deployment_v1" "eureka" {
+  #checkov:skip=CKV_K8S_15:Accepted: locally imported image requires pull policy Never; see deploy/terraform/README.md.
+  #checkov:skip=CKV_K8S_43:Accepted: locally imported image has no registry digest; see deploy/terraform/README.md.
   count = local.infra
 
   metadata {
