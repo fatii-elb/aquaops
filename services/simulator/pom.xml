@@ -74,6 +74,11 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+                <!-- Metriques Prometheus (SCRUM-57 : dashboards Grafana d'E6), exposees sur /actuator/prometheus. -->
+                <dependency>
+                        <groupId>io.micrometer</groupId>
+                        <artifactId>micrometer-registry-prometheus</artifactId>
+                </dependency>
 	</dependencies>
 
 	<build>
