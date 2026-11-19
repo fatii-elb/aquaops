@@ -31,7 +31,7 @@ jobs:
           SEMGREP_VERSION: 1.100.0
         run: |
           python3 -m venv "$RUNNER_TEMP/semgrep-venv"
-          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --quiet "semgrep==${SEMGREP_VERSION}"
+          "$RUNNER_TEMP/semgrep-venv/bin/pip" install --quiet "setuptools==80.9.0" "semgrep==${SEMGREP_VERSION}"
           echo "$RUNNER_TEMP/semgrep-venv/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/semgrep-venv/bin/semgrep" --version
 
