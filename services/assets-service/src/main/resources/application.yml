@@ -33,7 +33,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
 
 # Eureka (exigence de l'enseignant). Desactive tant que EUREKA_URL n'est pas fourni :
 # sans serveur Eureka, le service demarre normalement.
