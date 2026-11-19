@@ -50,7 +50,7 @@ USER root
 RUN echo "Force rebuild 2026-11-19 - CVE-2026-121810" \
  && sed -i 's/^nginx=.*/nginx/' /etc/apk/world \
  && apk update \
- && apk upgrade --no-cache nginx \
+ && apk upgrade --no-cache \
  && nginx -v
 
 COPY --from=build /out /usr/share/nginx/html
