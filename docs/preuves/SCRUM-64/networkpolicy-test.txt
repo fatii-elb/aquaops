@@ -26,3 +26,8 @@ Cible     : postgres:5432 (doit être bloquée)
 La NetworkPolicy default-deny-all bloque bien les flux non autorisés.
 Le test est automatisé via deploy/k3s/tests/test-networkpolicy.sh et peut être relancé à tout moment.
 SCRUM-64 validé (partie test).
+
+## Vérification des comptes de service (moindre privilège)
+Le namespace `aquaops` ne contient qu'un seul ServiceAccount : `default`.
+Aucun `ClusterRoleBinding` ni `RoleBinding` n'est associé au SA `default`.
+=> Le SA n'a aucun droit d'action sur l'API Kubernetes (principe du moindre privilège respecté).
