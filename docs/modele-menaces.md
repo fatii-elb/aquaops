@@ -58,3 +58,24 @@ Nous utilisons la méthode **STRIDE** (Spoofing, Tampering, Repudiation, Informa
 
 ## 5. Conclusion
 La plateforme AquaOps met en œuvre une défense en profondeur (défense périmétrique avec TLS, authentification forte avec Keycloak, contrôle d'accès RBAC, et surveillance de l'infrastructure). Les menaces résiduelles sont documentées et suivies dans le cadre de la recette (RC-09 pour la sécurité).
+## 6. Preuves de test (traçabilité)
+Chaque menace est associée à une preuve de test ou d'audit disponible dans le dépôt.
+
+| Menace | Parade | Preuve / Référence |
+|---|---|---|
+| Usurpation d'identité (admin) | Keycloak + MFA | `docs/preuves/FR-25/` (MFA superviseur/opérateur), `docs/preuves/FR-24/` (refus connexion) |
+| Faux simulateur | Authentification simulateur | À faire (SCRUM-65) |
+| Altération en transit | TLS/HTTPS | `docs/preuves/NFR-14/` (testssl avant/après TLSOption) |
+| Modification de seuils sans trace | Journal d'audit | `docs/preuves/FR-24/` (audit connexions) |
+| Répudiation | Journal d'audit + IP | Idem FR-24 |
+| Accès inter-services non autorisé | NetworkPolicy | `docs/preuves/SCRUM-64/networkpolicy-test.txt` (test automatisé : flux bloqué) |
+| Fuite de secrets | Gitleaks | `docs/security-scans.md` (CI) |
+| Déni de service (surcharge) | Rate limiting | À faire (SCRUM-65) |
+| Déni de service (crash service) | Sondes + résilience | `docs/preuves/RC-05/` (sonde disponibilité, télémétrie sous charge) |
+| Déni de service (surcharge notifications) | Kafka découplé | `docs/preuves/SCRUM-53/notifications-zero-loss.txt` (test arrêt notifications = 0 perte) |
+| Élévation de privilèges | RBAC passerelle | `docs/preuves/FR-24/` (audit + refus opérateur) |
+| Accès conteneurs/k3s | Images minimales + Trivy | `docs/security-scans.md`, `.trivyignore` (nginx 1.30.7) |
+| Vulnérabilités bibliothèques | SCA + SBOM | `docs/security-scans.md`, SBOM CycloneDX |
+| Configuration k3s (moindre privilège) | SA default sans binding | `docs/preuves/SCRUM-64/networkpolicy-test.txt` (section ServiceAccounts) |
+
+**Note :** Les preuves marquées "À faire" correspondent aux cartes SCRUM-65 (rate limiting, authentification simulateur) qui seront traitées au Sprint 6.
