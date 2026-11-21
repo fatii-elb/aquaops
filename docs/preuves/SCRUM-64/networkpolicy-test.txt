@@ -1,0 +1,28 @@
+# SCRUM-64 - Test automatisé NetworkPolicy (default-deny-all)
+# Date : 2026-11-21
+# Environnement : k3s aquaops-test (namespace aquaops)
+
+## Objectif
+Prouver qu'un flux non autorisé est bien bloqué par les NetworkPolicies.
+
+## Scénario
+- Un pod "attaquant" (netpol-attacker) est lancé dans le namespace aquaops.
+- Il tente de se connecter à postgres:5432 (service protégé par default-deny-all).
+- La NetworkPolicy doit bloquer la connexion.
+
+## Résultat
+=== Test NetworkPolicy (default-deny-all) ===
+Namespace : aquaops
+Cible     : postgres:5432 (doit être bloquée)
+
+[1/3] Lancement du pod attaquant...
+[2/3] Tentative de connexion à postgres:5432...
+✅ SUCCÈS : Connexion bloquée comme prévu.
+[3/3] Nettoyage...
+
+=== TEST PASSÉ ===
+
+## Conclusion
+La NetworkPolicy default-deny-all bloque bien les flux non autorisés.
+Le test est automatisé via deploy/k3s/tests/test-networkpolicy.sh et peut être relancé à tout moment.
+SCRUM-64 validé (partie test).
