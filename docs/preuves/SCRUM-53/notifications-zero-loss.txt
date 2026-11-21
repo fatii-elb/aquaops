@@ -1,0 +1,35 @@
+# SCRUM-53 - Notifications sans impact sur l'ingestion (0 perte)
+# Date : 2026-11-21
+# Environnement : VM test 8 Go, images tag fe164c456ba22e62204e52110f5287e731e50751
+
+## Objectif
+Prouver qu'aucun message n'est perdu si le service notifications est arrêté
+pendant que des événements continuent d'être publiés dans Kafka.
+
+## Étapes exécutées
+1. Injection de 10 messages dans le topic incident-events (consommateur actif)
+2. Vérification : LAG = 0
+3. ARRÊT de aquaops-test-notifications-1
+4. Injection de 10 nouveaux messages dans incident-events
+5. Vérification pendant l'arrêt : LOG-END-OFFSET = 20, CURRENT-OFFSET = 10, LAG = 10
+6. REDÉMARRAGE de aquaops-test-notifications-1
+7. Vérification après reprise : LOG-END-OFFSET = 20, CURRENT-OFFSET = 20, LAG = 0
+
+## Sorties (preuve)
+
+### État avant arrêt (LAG = 0)
+GROUP                 TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+notifications-service incident-events 0          10              10              0
+
+### État pendant arrêt (LAG = 10, 10 messages en attente)
+Consumer group 'notifications-service' has no active members.
+GROUP                 TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+notifications-service incident-events 0          10              20              10
+
+### État après reprise (LAG = 0, aucun message perdu)
+GROUP                 TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+notifications-service incident-events 0          20              20              0
+
+## Conclusion
+Le lag est passé de 10 à 0 au redémarrage. Aucun message perdu.
+SCRUM-53 validé.
