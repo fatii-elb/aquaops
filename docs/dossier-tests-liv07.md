@@ -80,3 +80,25 @@ doivent être archivées sous `docs/preuves/RC-xx/`.
 - Distinguer « réussi », « réussi avec réserves », « écart » et « non exécuté ».
 - Faire relire le dossier par l'équipe et noter la date et les personnes ayant
   participé à la relecture.
+
+
+## Résultats complémentaires du 22 novembre 2026 (E1)
+
+Preuves : voir [dossier-preuves-aquaops.pdf](dossier-preuves-aquaops.pdf) (version modifiable : [docx](dossier-preuves-aquaops.docx)).
+
+| Scénario | Résultat attendu | Résultat obtenu | Preuve | Statut |
+|---|---|---|---|---|
+| RC-04 (NFR-04) | Sous 500 mesures/s pendant 5 min, le HPA Telemetry passe de 2 à au moins 4 pods prêts, puis revient à 2 | Charge lancée à 13:04:13. À 13:06:13, 4 pods en 1/1. Retour à 2 pods à 13:18:31 | Captures 10 à 13 | Réussi |
+| RC-09 (NFR-18) | Sans clé : 401. Avec clé valide : 202. Dépassement du débit : 429 | 401, 202, puis rafale de 200 requêtes : 37 × 202 et 163 × 429, 0 timeout (seuil abaissé à 10 req/s pour le test) | Capture 14 | Réussi |
+| Eureka | Telemetry et Simulator inscrits et UP | TELEMETRY-SERVICE (2 instances) et SIMULATOR UP, plus GATEWAY et ASSETS-SERVICE | Capture 15 | Réussi (4 services sur 7 visibles) |
+| SBOM (LIV-02) | 8 artefacts CycloneDX | 8 artefacts (run Images #56, branche main) | Capture 16 | Réussi |
+
+### Conditions de test du 22 novembre 2026
+
+- La VM a redémarré 5 fois depuis le 21 novembre à 17:26. Le démarrage simultané des services a fait monter la charge à 35 pour 4 cœurs, avec des redémarrages en boucle dus aux sondes de démarrage.
+- Keycloak, notifications, incidents et detection ont été mis à 0 réplica pour libérer les 4 cœurs. Ces services n'interviennent pas dans RC-04 ni RC-09. Cela explique aussi pourquoi Eureka n'affiche que 4 services sur 7.
+- La sonde de disponibilité de Kafka (exec JVM) a été remplacée par un test TCP sur le port 9092, car elle chargeait la VM. Modification faite avec kubectl : Terraform la remettra à l'ancienne valeur, correction à reporter dans le code Terraform.
+- RC-04 : les montées du HPA entre 12:25 et 12:50 venaient du redémarrage de Kafka et ne sont pas comptées. Seule la montée déclenchée à 13:04 par le simulateur sert de preuve.
+- RC-09 : seuil abaissé de 500 à 10 req/s via le ConfigMap `aquaops-config`, puis remis à 500 (vérifié). Code inchangé.
+- Les compteurs finaux du simulateur n'ont pas pu être relevés : la route de statut n'existe pas. Ils ne font pas partie du critère RC-04.
+- Eureka est à rejouer avec les 7 services actifs pour la preuve finale.
