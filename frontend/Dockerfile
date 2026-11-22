@@ -44,14 +44,14 @@ ENV GATEWAY_URL=http://gateway:8080 \
 # L'application compilee. L'utilisateur nginx doit pouvoir ecrire config.json dans ce dossier.
 USER root
 
-# Correctifs de securite Alpine (Trivy, SCRUM-63)
-# CACHE_BUST : le echo force Docker a invalider le cache de cette couche.
-# On retire l'epinglage de nginx, on rafraichit l'index, on met a jour nginx, et on verifie la version.
-RUN echo "Force rebuild 2026-11-19 - CVE-2026-121810" \
- && sed -i 's/^nginx=.*/nginx/' /etc/apk/world \
+# Correctifs de securite Alpine (Trivy, SCRUM-63).
+# Les modules nginx (geoip, image-filter, njs, xslt) sont epingles a 1.30.6 et bloquent
+# la mise a jour de nginx : inutilises ici, on les retire puis on met tout a jour.
+RUN sed -i -E 's/^(nginx[^=]*)=.*/\1/' /etc/apk/world \
  && apk update \
+ && apk del nginx-module-geoip nginx-module-image-filter nginx-module-njs nginx-module-xslt \
  && apk upgrade --no-cache \
- && nginx -v
+ && nginx -v 2>&1 | grep -q "1.30.7"
 
 COPY --from=build /out /usr/share/nginx/html
 # Le dossier lui-meme doit etre inscriptible par l'utilisateur nginx (101) pour y creer config.json.

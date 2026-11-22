@@ -1,6 +1,11 @@
 global:
   scrape_interval: 15s
 
+# La gateway (port 8080) n'est volontairement pas scrapée :
+# son MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE est forcé à "health"
+# (choix E5, compose.yml:134 / services.tf:118). Voir message à E5.
+# Les autres services exposent /actuator/prometheus sur leur port applicatif.
+
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
@@ -9,10 +14,10 @@ scrape_configs:
   - job_name: 'aquaops-services'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: 
-          - 'gateway:8080'
-          - 'telemetry:8080'
-          - 'assets:8080'
-          - 'incidents:8080'
-          - 'detection:8080'
-          - 'notifications:8080'
+      - targets:
+          - 'telemetry:8081'
+          - 'assets:8082'
+          - 'detection:8083'
+          - 'incidents:8084'
+          - 'notifications:8085'
+          # - 'gateway:8080'   # en attente décision E5 (management port 8090 ou non)
