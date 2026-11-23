@@ -1,0 +1,14 @@
+=== SCRUM-50 / NFR-03 : temps de reponse de l'API ===
+requetes : 2291 (32.6 /s) | erreurs : 0.00 %
+global : p95 = 24.9 ms (seuil 500) | moyenne = 13.0 ms | max = 151.8 ms
+  /api/incidents               p95 = 23.7 ms | moy = 12.1 ms
+  /api/assets/zones            p95 = 22.8 ms | moy = 12.6 ms
+  /api/assets/sensors          p95 = 23.6 ms | moy = 12.5 ms
+  /api/assets/pumps            p95 = 24.5 ms | moy = 12.8 ms
+  /api/assets/pipes            p95 = 21.1 ms | moy = 12.2 ms
+  /api/assets/tanks            p95 = 23.2 ms | moy = 12.6 ms
+  /api/assets/interventions    p95 = 22.4 ms | moy = 12.9 ms
+  /api/detection/anomalies     p95 = 36.8 ms | moy = 19.9 ms
+  /api/detection/thresholds    p95 = 25.2 ms | moy = 14.8 ms
+  /api/notifications/list      p95 = 12.7 ms | moy = 7.7 ms
+VERDICT : OK
