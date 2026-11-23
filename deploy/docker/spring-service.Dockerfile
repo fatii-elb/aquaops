@@ -57,6 +57,14 @@ RUN if ! command -v curl > /dev/null; then \
  && useradd --system --gid aquaops --no-create-home aquaops
 
 WORKDIR /app
+
+# OpenTelemetry Java agent (SCRUM-58, traces). Present in the image but NOT
+# attached by default: a deployment turns tracing on by adding
+#   JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -javaagent:/otel/opentelemetry-javaagent.jar"
+# plus OTEL_SERVICE_NAME and OTEL_EXPORTER_OTLP_ENDPOINT. Version pinned, SHA-256 checked.
+ADD --checksum=sha256:e43a270df53c6f423e0ab157be9c27ccc01d5dc3232e162fe54777573db2f149 --chmod=755 \
+    https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.33.1/opentelemetry-javaagent.jar \
+    /otel/opentelemetry-javaagent.jar
 COPY --from=build --chown=aquaops:aquaops /app.jar app.jar
 USER aquaops
 
