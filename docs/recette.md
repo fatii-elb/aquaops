@@ -3,6 +3,8 @@
 Un scénario par ligne : procédure, jeu de données, résultat attendu. La colonne **Résultat** est à remplir pendant l'exécution
 (`Réussi` ou `Écart` + lien vers la preuve : capture, journal, rapport). Chaque étudiante archive ses preuves dans `docs/preuves/RC-xx/`.
 
+Le dossier consolidé demandé par LIV-07 est dans [`dossier-tests-liv07.md`](dossier-tests-liv07.md).
+
 > Les scénarios sont reconstitués d'après les plans de sprint (colonnes « Vérification »). Les numéros RC-02 et RC-03 sont à
 > confirmer avec le cahier des charges ; corriger ce tableau si l'intitulé diffère.
 
