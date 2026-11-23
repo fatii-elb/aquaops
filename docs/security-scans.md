@@ -130,3 +130,10 @@ done
 docker run --rm -v "$PWD/sca:/sca" aquasec/trivy:0.76.2 rootfs --scanners vuln \
   --severity CRITICAL --ignore-unfixed --exit-code 1 /sca/jars
 ```
+
+## OWASP ZAP (DAST)
+Workflow `.github/workflows/zap.yml` : construit l'image du frontend, la démarre sur le runner GitHub et lance `zap-baseline.py` (scan passif, image ZAP épinglée par digest). Le job échoue uniquement sur une alerte HIGH ; les alertes moyennes et basses restent dans le rapport HTML (artefact `zap-report`, 14 jours). Déclenchement : pull request ou push touchant `frontend/`, chaque lundi, ou à la main.
+
+Premier scan (local) : 0 HIGH. En-têtes `Content-Security-Policy` et `Permissions-Policy` ajoutés dans nginx. Alertes acceptées : cache long des fichiers compilés (noms avec empreinte, voulu), horodatages du bundle (faux positifs), `Cross-Origin-Embedder-Policy` (risque de casser la connexion Keycloak).
+
+Limite : l'API derrière la passerelle n'est pas analysée (chaque route exige un jeton Keycloak).

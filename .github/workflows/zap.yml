@@ -1,0 +1,89 @@
+# =============================================================================
+# AquaOps DAST: OWASP ZAP baseline (passive scan) against the frontend image.
+# Sprint 5, E4 · NFR-16.
+#
+# The frontend is built from the repository and started on the runner; ZAP
+# crawls it and applies its passive rules. The job FAILS only on HIGH alerts;
+# medium and low ones stay in the HTML report (artifact "zap-report").
+# Not covered: the API behind the gateway (every route needs a Keycloak token).
+#
+# Safety: GitHub-hosted runner only, read-only token, no secret, no deployment.
+# ZAP image pinned by tag AND digest; actions by commit SHA.
+# =============================================================================
+
+name: ZAP
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/zap.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/zap.yml'
+  schedule:
+    - cron: '41 4 * * 1'       # weekly: new ZAP rules appear without any commit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zap-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:stable@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+
+jobs:
+  zap-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build and start the frontend
+        run: |
+          docker build -t aquaops-frontend:zap frontend
+          docker run -d --name frontend -p 127.0.0.1:8080:8080 \
+            -e GATEWAY_URL=http://127.0.0.1:9 \
+            -e KEYCLOAK_ISSUER=http://localhost:8180/realms/aquaops \
+            -e KEYCLOAK_CLIENT_ID=aquaops-frontend \
+            -e ASSETS_API_BASE_URL=/api/assets \
+            -e TELEMETRY_API_BASE_URL=/api/telemetry \
+            -e SENSORS_MODE=mock \
+            -e SENSOR_SILENCE_THRESHOLD_SECONDS=10 \
+            -e SENSOR_LOOKBACK_SECONDS=120 \
+            aquaops-frontend:zap
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/healthz && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8080/healthz
+
+      - name: ZAP baseline scan
+        run: |
+          mkdir -p zap-out && chmod 777 zap-out
+          docker run --rm --network host -v "$PWD/zap-out:/zap/wrk:rw" "$ZAP_IMAGE" \
+            zap-baseline.py -t http://127.0.0.1:8080 -J zap.json -r zap.html -I
+
+      - name: Fail on HIGH alerts
+        run: |
+          count() { jq "[(.site // [])[].alerts[]? | select(.riskcode==\"$1\")] | length" zap-out/zap.json; }
+          HIGH=$(count 3); MEDIUM=$(count 2); LOW=$(count 1)
+          echo ">>> HIGH=$HIGH MEDIUM=$MEDIUM LOW=$LOW"
+          echo "ZAP frontend: HIGH=$HIGH MEDIUM=$MEDIUM LOW=$LOW" >> "$GITHUB_STEP_SUMMARY"
+          [ "$HIGH" = "0" ]
+
+      - name: Upload the ZAP report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: zap-report
+          path: zap-out
+          retention-days: 14
