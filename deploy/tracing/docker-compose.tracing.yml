@@ -1,0 +1,46 @@
+# =============================================================================
+# AquaOps: distributed traces (SCRUM-58 / NFR-11). Card SCRUM-58 · E4.
+#
+# Overlay for the integration stack: adds Jaeger and attaches the OpenTelemetry
+# agent (already inside every Spring image, in /otel) to gateway, telemetry,
+# detection and incidents. Without this file nothing is traced.
+#
+#   docker compose -f deploy/integration/docker-compose.integration.yml \
+#                  -f deploy/tracing/docker-compose.tracing.yml up -d
+#   Jaeger UI : http://localhost:16686  (local machine only)
+#
+# The agent propagates the trace context in Kafka message headers by itself:
+# the same trace links the reading, the anomaly and the incident.
+# =============================================================================
+x-otel: &otel
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75 -javaagent:/otel/opentelemetry-javaagent.jar"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_METRICS_EXPORTER: "none"
+  OTEL_LOGS_EXPORTER: "none"
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      MEMORY_MAX_TRACES: "5000"   # bounded memory (small VM)
+    ports:
+      - "127.0.0.1:16686:16686"   # UI, local machine only; OTLP (4318) stays internal
+    restart: unless-stopped
+  gateway:
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: gateway
+  telemetry:
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: telemetry-service
+  detection:
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: detection-service
+  incidents:
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: incidents-service
