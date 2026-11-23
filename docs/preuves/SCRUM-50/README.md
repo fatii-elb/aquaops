@@ -31,3 +31,6 @@ Exigence : 95 % des requêtes en 500 ms au plus. Test de charge k6 (`deploy/load
 - Lecture seule : l'ingestion (POST télémétrie) est couverte par RC-04 (autoscaling).
 - Les routes qui répondent 403 au rôle utilisé sont exclues de la charge (sondes au démarrage du test).
 - Le jeton est demandé au client public aquaops-frontend (mot de passe direct, activé uniquement sur le Keycloak local, réglage non versionné) pour que le jeton porte les rôles.
+
+## Capture
+![Résultat du test k6 : p95 par route et verdict](k6-p95.png)
