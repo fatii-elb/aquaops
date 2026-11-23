@@ -34,6 +34,7 @@ server {
     # Fichiers compiles : leur nom contient une empreinte, on peut les garder longtemps.
     location ~* \.(?:js|css|woff2?|svg|png|jpe?g|ico|webp)$ {
         add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
         add_header X-Content-Type-Options "nosniff" always;
         try_files $uri =404;
     }
@@ -70,6 +71,8 @@ server {
     # Application Angular : toute autre adresse (/incidents/3, /dashboard...) renvoie index.html.
     location / {
         add_header Cache-Control "no-cache" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'unsafe-hashes' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${KEYCLOAK_ISSUER}/; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
