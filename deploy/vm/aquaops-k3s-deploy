@@ -1,0 +1,321 @@
+#!/bin/bash -p
+# =============================================================================
+# AquaOps: privileged deployment wrapper of the k3s host (SCRUM-56 / NFR-09, E5).
+#
+# Installed by the administrator of the k3s host from a reviewed commit of
+# main, never run from a checkout (deploy/vm/README-k3s-runner.md):
+#   /usr/local/sbin/aquaops-k3s-deploy   root:root, mode 755
+# The runner account "aquaops-k3s-runner" (no sudo group, no docker group) may
+# start it as root through ONE sudoers rule (aquaops-k3s-deploy.sudoers), from
+# the deploy job of .github/workflows/k3s-deploy.yml:
+#
+#   printf '%s\n%s\n' "$TOKEN" "$ACTOR" \
+#     | sudo -n /usr/local/sbin/aquaops-k3s-deploy rc11 <sha> <pushed_at>
+#
+# Administrator only (not allowed by the sudoers rule): every check, the
+# cluster, Terraform, Docker and containerd reachable, nothing changed:
+#
+#   printf '%s\n%s\n' "$TOKEN" "$ACTOR" | sudo /usr/local/sbin/aquaops-k3s-deploy check rc11 <sha>
+#
+# stdin, line 1: GitHub token, reads the repository and its packages (in the
+#                job: the GITHUB_TOKEN, contents: read, packages: read)
+# stdin, line 2: GitHub user name for the GHCR login
+# The token is never on a command line, never printed, never written to disk.
+#
+# The caller chooses ONLY the environment (from a fixed list), the commit SHA
+# and the push time (a number). Repository, branch, paths, accounts,
+# kubeconfig, secrets file and commands are fixed below; the caller's
+# environment and working directory are ignored ("bash -p" + wiped below).
+#
+# Privileges: root only for what needs root: the lock and the private git
+# repository (a root-only folder) and the import of the scanned images into
+# k3s containerd. Everything else (docker pull, Terraform, kubectl, the
+# deployment scripts) runs as the service account aquaops-k3s through setpriv.
+# aquaops-k3s is in the docker group, which is root-equivalent: the drop keeps
+# the tools and their files away from root, it is not a boundary against a
+# malicious commit of main. THE boundary is runner -> sudo -> this wrapper:
+# a commit of main (reviewed code), fixed commands, fixed environment list.
+#
+# Steps: arguments -> token -> owner and mode of every trusted path (PATH
+# included) -> secrets file parsed (TF_VAR_* lines only, never sourced) ->
+# lock -> fetch main into the private repository (no hook, no stored
+# credential) -> SHA on main -> that commit prepares k3s deployments and its
+# envs/<env>.tfvars enables the services -> export the deploy files of THAT
+# commit -> its import-images.sh (as aquaops-k3s: GHCR pull, revision label,
+# image archive) -> root imports the archive into k3s containerd -> its
+# deploy-services.sh (as aquaops-k3s: apply, verify, roll back on failure,
+# push-to-healthy for NFR-09).
+#
+# Exit codes (same as deploy-services.sh): 0 deployed and healthy · 1 failed,
+# the previous version runs (restored, or never touched) · 2 refused, nothing
+# changed · 3 failed and NOT restored: act now.
+# =============================================================================
+set -euo pipefail
+umask 077
+
+# BEGIN FIXED CONFIGURATION (the tests replace this block, nothing else)
+readonly RUN_USER=root
+readonly SVC_USER=aquaops-k3s
+readonly ROOT_OWNER=root
+readonly SELF=/usr/local/sbin/aquaops-k3s-deploy
+readonly CONF_DIR=/etc/aquaops-k3s
+readonly ROOT_BASE=/var/lib/aquaops-k3s-deploy
+readonly SVC_BASE=/var/lib/aquaops-k3s
+readonly REPO_URL=https://github.com/fatii-elb/aquaops.git
+readonly SAFE_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+readonly -a AS_SVC=(setpriv --reuid=aquaops-k3s --regid=aquaops-k3s --init-groups --inh-caps=-all --)
+readonly -a K3S_IMPORT=(k3s ctr -n k8s.io images import)
+# END FIXED CONFIGURATION
+
+readonly ALLOWED_ENVS="rc11"           # disposable environment only, for now
+readonly MAIN_REF=refs/remotes/origin/main
+readonly GIT_DIR_PATH="$ROOT_BASE/repo.git"
+readonly LOCK_FILE="$ROOT_BASE/lock"
+readonly RELEASE="$SVC_BASE/release"
+readonly STATE="$SVC_BASE/state"
+readonly TMP="$SVC_BASE/tmp"
+readonly SVC_HOME="$SVC_BASE/home"
+readonly IMAGES_TAR="$TMP/images.tar"
+# What import-images.sh, deploy-services.sh, tf.sh and Terraform read.
+readonly -a EXPORT_PATHS=(
+    deploy/k3s
+    deploy/terraform
+    deploy/k8s
+    deploy/integration/postgres-init
+    docs/keycloak
+)
+
+# ---- Clean environment: keep nothing from the caller -------------------------
+caller="${SUDO_USER:-}"
+[[ "$caller" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || caller="?"
+while IFS= read -r v; do unset -v "$v" 2> /dev/null || true; done < <(compgen -e)
+export PATH="$SAFE_PATH" HOME="$ROOT_BASE" LC_ALL=C
+cd /
+
+log()    { printf '[aquaops-k3s-deploy] %s\n' "$*"; }
+refuse() { printf '[aquaops-k3s-deploy] REFUSED: %s\n' "$*" >&2; exit 2; }
+
+# ---- 1. Arguments (values are never echoed back) ------------------------------
+MODE=deploy; ENV_NAME=""; SHA=""; PUSHED_AT=""
+if [ "$#" -eq 3 ] && [ "$1" = check ]; then
+    MODE=check; ENV_NAME="$2"; SHA="$3"
+elif [ "$#" -eq 3 ]; then
+    ENV_NAME="$1"; SHA="$2"; PUSHED_AT="$3"
+else
+    refuse "usage: aquaops-k3s-deploy <env> <40-hex SHA> <push time, epoch seconds> | aquaops-k3s-deploy check <env> <40-hex SHA>"
+fi
+case " $ALLOWED_ENVS " in
+    *" $ENV_NAME "*) [[ "$ENV_NAME" =~ ^[a-z][a-z0-9-]{1,20}$ ]] || refuse "invalid environment" ;;
+    *) refuse "environment not deployable here (allowed: $ALLOWED_ENVS)" ;;
+esac
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || refuse "the commit must be a full 40-character lowercase SHA"
+[ "$MODE" = check ] || [[ "$PUSHED_AT" =~ ^[0-9]{9,11}$ ]] \
+    || refuse "the push time must be epoch seconds"
+
+[ "$(id -un)" = "$RUN_USER" ] || refuse "must run as $RUN_USER (through sudo)"
+readonly ENV_FILE="$CONF_DIR/$ENV_NAME.env"
+readonly KUBECONFIG_FILE="$CONF_DIR/$ENV_NAME.kubeconfig"
+
+# ---- 2. Token and user name, from stdin only ----------------------------------
+[ ! -t 0 ] || refuse "pipe the token on stdin (line 1) and the GitHub user name (line 2)"
+TOKEN=""; ACTOR=""
+IFS= read -r -t 10 TOKEN || true
+IFS= read -r -t 2 ACTOR || true
+# Same alphabet as deploy/vm/aquaops-deploy: the stateless "ghs_<id>_<JWT>"
+# GITHUB_TOKEN (~520 characters, "." and "-"), PATs, legacy tokens.
+if ! [[ "$TOKEN" =~ ^[A-Za-z0-9_.-]{20,4096}$ ]]; then
+    TOKEN=""
+    refuse "missing or malformed token on stdin (line 1)"
+fi
+[[ "$ACTOR" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,38})(\[bot\])?$ ]] \
+    || refuse "missing or malformed GitHub user name on stdin (line 2)"
+
+# ---- 3. Trusted paths: owner, type, no write access for group or others -------
+mode_of() { stat -c '%a' -- "$1"; }
+check_owned() {   # check_owned <path> <d|f> <owner>
+    local path="$1" type="$2" owner="$3" info
+    [ ! -L "$path" ] || refuse "$path is a symbolic link"
+    if [ "$type" = d ]; then [ -d "$path" ] || refuse "$path: missing directory"
+    else [ -f "$path" ] || refuse "$path: missing file"; fi
+    info="$(stat -c '%U %a' -- "$path")" || refuse "cannot read the owner of $path"
+    [ "${info% *}" = "$owner" ] || refuse "$path must be owned by $owner"
+    (( (8#${info#* } & 8#022) == 0 )) || refuse "$path must not be writable by group or others"
+}
+private() {       # private <path>: no access at all for group and others
+    (( (8#$(mode_of "$1") & 8#077) == 0 )) || refuse "$1 must be private to its owner (mode 700 or 600)"
+}
+check_owned "$SELF" f "$ROOT_OWNER"
+check_owned "$(dirname "$SELF")" d "$ROOT_OWNER"
+check_owned "$CONF_DIR" d "$ROOT_OWNER"
+check_owned "$ENV_FILE" f "$ROOT_OWNER";        private "$ENV_FILE"
+check_owned "$KUBECONFIG_FILE" f "$SVC_USER";   private "$KUBECONFIG_FILE"
+check_owned "$ROOT_BASE" d "$ROOT_OWNER";       private "$ROOT_BASE"
+check_owned "$SVC_BASE" d "$SVC_USER";          private "$SVC_BASE"
+IFS=: read -r -a path_dirs <<< "$SAFE_PATH"
+for d in "${path_dirs[@]}"; do
+    [ -d "$d" ] || continue
+    info="$(stat -L -c '%U %a' -- "$d")" || refuse "cannot read the owner of $d"
+    case "${info% *}" in root|"$ROOT_OWNER") ;; *) refuse "PATH directory $d must be owned by root" ;; esac
+    (( (8#${info#* } & 8#022) == 0 )) || refuse "PATH directory $d must not be writable by group or others"
+done
+[ -e "$GIT_DIR_PATH" ] || mkdir -m 700 -- "$GIT_DIR_PATH"
+check_owned "$GIT_DIR_PATH" d "$ROOT_OWNER"
+for d in "$STATE" "$TMP" "$SVC_HOME"; do
+    [ -e "$d" ] || [ -L "$d" ] || "${AS_SVC[@]}" mkdir -m 700 -- "$d"
+    check_owned "$d" d "$SVC_USER"
+done
+[ ! -L "$LOCK_FILE" ] || refuse "$LOCK_FILE is a symbolic link"
+
+# ---- 4. Secrets file: TF_VAR_name=value lines only, never sourced -------------
+TF_VARS=(); REDACT=""
+n=0
+while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1)); line="${line%$'\r'}"
+    case "$line" in ''|'#'*) continue ;; esac
+    [[ "$line" =~ ^(TF_VAR_[a-z][a-z0-9_]{0,63})=(.*)$ ]] \
+        || refuse "$ENV_FILE line $n: only TF_VAR_<name>=<value> lines and comments are allowed"
+    name="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
+    if [[ "$value" =~ ^\'(.*)\'$ ]] || [[ "$value" =~ ^\"(.*)\"$ ]]; then value="${BASH_REMATCH[1]}"; fi
+    [ -n "$value" ] || refuse "$ENV_FILE line $n: $name is empty"
+    case "$value" in change-me|changeme|CHANGE_ME|TODO|xxx) refuse "$ENV_FILE line $n: $name is a placeholder" ;; esac
+    TF_VARS+=("$name=$value")
+    [ "${#value}" -lt 8 ] || REDACT+="$value"$'\n'
+done < "$ENV_FILE"
+[ "${#TF_VARS[@]}" -gt 0 ] || refuse "$ENV_FILE defines no TF_VAR_ variable"
+REDACT+="$TOKEN"$'\n'
+unset line name value
+
+# ---- 5. One deployment at a time ----------------------------------------------
+exec 9> "$LOCK_FILE"
+flock -n 9 || refuse "another deployment is running"
+log "mode: $MODE  environment: $ENV_NAME  commit: $SHA  caller: $caller"
+
+# ---- 6. The commit must be on main --------------------------------------------
+git_cmd() {   # git on the private bare repository: no user or system config, no hook
+    # shellcheck disable=SC2030  # git settings for this git process only, on purpose
+    (
+        export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 \
+            GIT_ASKPASS=/bin/false SSH_ASKPASS=/bin/false GIT_SSH_COMMAND=/bin/false \
+            GIT_CONFIG_COUNT="${GIT_CONFIG_COUNT:-1}" \
+            GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null
+        exec git --git-dir="$GIT_DIR_PATH" "$@"
+    )
+}
+[ -f "$GIT_DIR_PATH/HEAD" ] || git_cmd init --quiet --bare --template= > /dev/null \
+    || refuse "cannot create $GIT_DIR_PATH"
+auth="$(printf 'x-access-token:%s' "$TOKEN" | base64 -w 0)"
+# shellcheck disable=SC2031  # settings 1 and 2 for this fetch only, on purpose
+if ! (
+    export GIT_CONFIG_COUNT=3 \
+        GIT_CONFIG_KEY_1=http.https://github.com/.extraheader \
+        GIT_CONFIG_VALUE_1="AUTHORIZATION: basic $auth" \
+        GIT_CONFIG_KEY_2=credential.helper GIT_CONFIG_VALUE_2=
+    git_cmd fetch --quiet --no-tags --no-write-fetch-head -- "$REPO_URL" "+refs/heads/main:$MAIN_REF"
+); then
+    refuse "cannot fetch main from $REPO_URL (network or token)"
+fi
+unset auth
+git_cmd cat-file -e "$SHA^{commit}" 2> /dev/null || refuse "commit $SHA does not exist in the repository"
+git_cmd merge-base --is-ancestor "$SHA" "$MAIN_REF" 2> /dev/null \
+    || refuse "commit $SHA is not on main: only merged commits are deployed"
+log "commit $SHA is on main (main is at $(git_cmd rev-parse "$MAIN_REF"))"
+
+# ---- 7. That commit must prepare k3s deployments for this environment ---------
+for f in .github/workflows/k3s-deploy.yml deploy/k3s/import-images.sh deploy/k3s/deploy-services.sh; do
+    git_cmd cat-file -e "$SHA:$f" 2> /dev/null || refuse "$SHA has no $f: it predates k3s deployments"
+done
+git_cmd show "$SHA:deploy/terraform/environment/envs/$ENV_NAME.tfvars" 2> /dev/null \
+    | grep -qE '^[[:space:]]*services_enabled[[:space:]]*=[[:space:]]*true' \
+    || refuse "envs/$ENV_NAME.tfvars of $SHA does not enable the services"
+
+# ---- 8. Deploy files of THAT commit, owned by the service account -------------
+export_tree() {   # export_tree <dest>
+    local dest="$1"
+    "${AS_SVC[@]}" rm -rf -- "$dest"
+    "${AS_SVC[@]}" mkdir -m 700 -- "$dest"
+    git_cmd archive --format=tar "$SHA" -- "${EXPORT_PATHS[@]}" \
+        | "${AS_SVC[@]}" tar -x -f - -C "$dest" --no-same-owner --no-same-permissions \
+        || refuse "cannot export the deploy files of $SHA"
+}
+
+# Everything a child process gets: fixed values, the parsed TF_VAR_* (through
+# the environment, never on a command line).
+as_svc() {   # as_svc <command...>: run as the service account, fixed environment
+    # shellcheck disable=SC2030,SC2031  # environment of this child only, on purpose
+    (
+        export PATH="$SAFE_PATH" HOME="$SVC_HOME" LC_ALL=C TMPDIR="$TMP" \
+            KUBE_CONFIG_PATH="$KUBECONFIG_FILE" KUBECONFIG="$KUBECONFIG_FILE" \
+            AQUAOPS_TF_STATE_DIR="$STATE/terraform" \
+            AQUAOPS_K3S_HISTORY="$STATE/k3s-deployments.jsonl" \
+            AQUAOPS_K3S_DEPLOY_ENVS="$ENV_NAME" \
+            TF_PLUGIN_CACHE_DIR="$STATE/plugin-cache" TF_IN_AUTOMATION=1
+        for kv in "${TF_VARS[@]}"; do export "${kv?}"; done
+        exec "${AS_SVC[@]}" "$@"
+    )
+}
+redact() {   # hide the token and every secret value of the env file, line by line
+    REDACT_VALUES="$REDACT" awk '
+        BEGIN { n = split(ENVIRON["REDACT_VALUES"], v, "\n") }
+        {
+            line = $0
+            for (k = 1; k <= n; k++) {
+                if (v[k] == "") continue
+                out = ""; L = length(v[k])
+                while ((i = index(line, v[k])) > 0) { out = out substr(line, 1, i - 1) "***"; line = substr(line, i + L) }
+                line = out line
+            }
+            print line; fflush()
+        }'
+}
+
+if [ "$MODE" = check ]; then
+    export_tree "$TMP/check"
+    problems=0
+    { as_svc kubectl --request-timeout=15s get namespace kube-system -o name > /dev/null 2>&1 \
+        && log "check: cluster reachable with $KUBECONFIG_FILE"; } || { log "PROBLEM: cluster not reachable with $KUBECONFIG_FILE"; problems=1; }
+    { as_svc terraform version > /dev/null 2>&1 && log "check: terraform runs as $SVC_USER"; } \
+        || { log "PROBLEM: terraform cannot run as $SVC_USER"; problems=1; }
+    { as_svc docker version --format '{{.Server.Version}}' > /dev/null 2>&1 && log "check: Docker reachable as $SVC_USER"; } \
+        || { log "PROBLEM: Docker not reachable as $SVC_USER (docker group?)"; problems=1; }
+    { "${K3S_IMPORT[0]}" --version > /dev/null 2>&1 && log "check: ${K3S_IMPORT[0]} found"; } \
+        || { log "PROBLEM: ${K3S_IMPORT[0]} not found"; problems=1; }
+    "${AS_SVC[@]}" rm -rf -- "$TMP/check"
+    [ "$problems" -eq 0 ] || refuse "check failed: nothing was changed"
+    log "CHECK OK: commit on main, trusted paths, secrets file, cluster and tools ready; nothing was changed"
+    exit 0
+fi
+
+export_tree "$RELEASE.new"
+"${AS_SVC[@]}" rm -rf -- "$RELEASE"
+"${AS_SVC[@]}" mv -T -- "$RELEASE.new" "$RELEASE"
+log "deploy files of $SHA exported to $RELEASE"
+started="$(date -u +%s)"
+
+# ---- 9. Images: pull and check as the service account, import as root ---------
+"${AS_SVC[@]}" rm -f -- "$IMAGES_TAR"
+set +e
+printf '%s\n%s\n' "$TOKEN" "$ACTOR" \
+    | (
+        # shellcheck disable=SC2031  # settings of import-images.sh only
+        export AQUAOPS_IMAGE_SOURCE=ghcr K3S_IMPORT_CMD="tee $IMAGES_TAR" \
+            AQUAOPS_DIGESTS_FILE="$STATE/digests-$SHA.txt"
+        as_svc bash "$RELEASE/deploy/k3s/import-images.sh" "$SHA"
+    ) 2>&1 9>&- | redact
+rc="${PIPESTATUS[1]}"
+set -e
+[ "$rc" -eq 0 ] || { log "image import failed (exit $rc): the cluster was not touched"; exit 1; }
+check_owned "$IMAGES_TAR" f "$SVC_USER"
+"${K3S_IMPORT[@]}" "$IMAGES_TAR" > /dev/null 2>&1 9>&- \
+    || { log "k3s containerd refused the images: the cluster was not touched"; exit 1; }
+"${AS_SVC[@]}" rm -f -- "$IMAGES_TAR"
+log "7 images of $SHA imported into k3s containerd"
+
+# ---- 10. Deploy, verify, roll back on failure (deploy-services.sh) ------------
+set +e
+as_svc bash "$RELEASE/deploy/k3s/deploy-services.sh" "$ENV_NAME" "$SHA" "$PUSHED_AT" 2>&1 9>&- < /dev/null | redact
+rc="${PIPESTATUS[0]}"
+set -e
+TOKEN=""
+case "$rc" in 0|1|2|3) ;; *) rc=3 ;; esac
+log "deploy-services.sh finished with exit code $rc after $(( $(date -u +%s) - started )) s (images included)"
+exit "$rc"

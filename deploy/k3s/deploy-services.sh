@@ -88,8 +88,11 @@ START="$(date +%s)"
 [ -n "$PUSHED_AT" ] || PUSHED_AT="$START"
 
 # --- 2. images present in k3s -----------------------------------------------
+# Only when this user can use the socket (root): through the wrapper the
+# script runs as aquaops-k3s, the socket exists but is root-only, and the
+# wrapper has just imported the images as root.
 SOCK=/run/k3s/containerd/containerd.sock
-if [ -S "$SOCK" ] && command -v k3s > /dev/null; then
+if [ -S "$SOCK" ] && [ -r "$SOCK" ] && [ -w "$SOCK" ] && command -v k3s > /dev/null; then
   for s in $SERVICES; do
     k3s crictl inspecti "localhost/aquaops/$s:$SHA" > /dev/null 2>&1 \
       || die "image localhost/aquaops/$s:$SHA is not in k3s: run deploy/k3s/import-images.sh first"
@@ -105,9 +108,13 @@ fi
 # what Terraform last applied. Never to a release that failed.
 PREV=""
 if [ -f "$HISTORY" ]; then
-  PREV="$(grep "\"environment\":\"$ENV_NAME\"" "$HISTORY" | grep -E '"status":"(deployed|rolled_back)"' | tail -n 1 \
+  # "|| true": a history without any healthy entry (e.g. only
+  # "rollback_failed") is normal; without it, grep's "no match" ended the
+  # script under set -e/pipefail with exit 1 and no message, exactly when a
+  # new deployment is needed to recover (found in the sandbox, 19/11/2026).
+  PREV="$( { grep "\"environment\":\"$ENV_NAME\"" "$HISTORY" | grep -E '"status":"(deployed|rolled_back)"' | tail -n 1 \
     | sed -n -e 's/.*"sha":"\([0-9a-f]*\)".*"status":"deployed".*/\1/p' \
-             -e 's/.*"previous":"\([0-9a-f]*\)".*"status":"rolled_back".*/\1/p')"
+             -e 's/.*"previous":"\([0-9a-f]*\)".*"status":"rolled_back".*/\1/p'; } || true)"
 fi
 [ -n "$PREV" ] || PREV="$("$TF" environment "$ENV_NAME" output -raw services_image_tag 2> /dev/null || true)"
 [[ "$PREV" =~ ^[0-9a-f]{7,40}$ ]] || PREV=""

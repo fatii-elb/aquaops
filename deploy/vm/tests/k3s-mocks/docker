@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Test double of "docker" for test-aquaops-k3s-deploy.sh: records every call,
+# never talks to a daemon or a registry. Behaviour from mock.conf (the wrapper
+# wipes the environment).
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+printf 'CALL docker %s | user=%s\n' "$*" "$(id -un)" >> "$MOCK_LOG"
+for s in $MOCK_SECRETS; do case " $* " in *"$s"*) echo "SECRET-IN-ARGV docker" >> "$MOCK_LOG" ;; esac; done
+case "$1" in
+  version) [ "${MOCK_DOCKER:-up}" = up ] || exit 1; echo 27.3.1 ;;
+  login)
+    [ "$(cat)" = "$MOCK_TOKEN" ] && echo "LOGIN stdin=token-ok" >> "$MOCK_LOG" || echo "LOGIN stdin=MISMATCH" >> "$MOCK_LOG"
+    mkdir -p "$DOCKER_CONFIG"; echo '{"auths":{"ghcr.io":{}}}' > "$DOCKER_CONFIG/config.json" ;;
+  logout) echo "LOGOUT $2" >> "$MOCK_LOG" ;;
+  pull) [ "${MOCK_PULL:-ok}" = ok ] || { echo "denied: not found" >&2; exit 1; } ;;
+  tag) ;;
+  image)
+    ref="${*: -1}"
+    case "$*" in
+      *RepoDigests*) echo "${ref%:*}@sha256:$(printf '%064d' 7)" ;;
+      *revision*) echo "${MOCK_REVISION:-${ref##*:}}" ;;
+      *) ;;
+    esac ;;
+  save) shift; echo "MOCK-IMAGE-ARCHIVE $*" ;;
+  *) echo "mock docker: unexpected $1" >&2; exit 99 ;;
+esac

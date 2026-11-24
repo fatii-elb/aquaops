@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Test double of "git": records the command line (no token or secret may be
+# in it), then runs the real git.
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+echo "CALL git $*" >> "$MOCK_LOG"
+for s in $MOCK_SECRETS "$MOCK_TOKEN_B64"; do case " $* " in *"$s"*) echo "SECRET-IN-ARGV git" >> "$MOCK_LOG" ;; esac; done
+exec /usr/bin/git "$@"

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Test double of "kubectl" (check mode only: the stub deploy-services.sh never calls it).
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+printf 'CALL kubectl %s | KUBECONFIG=%s\n' "$*" "${KUBECONFIG:-}" >> "$MOCK_LOG"
+[ "${MOCK_CLUSTER:-up}" = up ] || { echo "connection refused" >&2; exit 1; }
+echo namespace/kube-system

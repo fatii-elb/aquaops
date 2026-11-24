@@ -12,8 +12,8 @@
 # Never runs code from a pull request: no pull_request / pull_request_target
 # trigger, the policy job refuses any ref but main and any SHA that is not on
 # main, and the deploy job checks out nothing: the privileged wrapper on the
-# host (deploy/vm/aquaops-k3s-deploy, NOT INSTALLED YET, see
-# deploy/terraform/README.md § 10) fetches main itself and verifies again.
+# host (deploy/vm/aquaops-k3s-deploy, installed by hand from a reviewed main:
+# deploy/vm/README-k3s-runner.md) fetches main itself and verifies again.
 #
 # Self-hosted runner: label aquaops-k3s, its OWN runner (not aquaops-test),
 # reachable only by this workflow's deploy job. The repository is public:
@@ -131,7 +131,11 @@ jobs:
       contents: read
       packages: read
     steps:
+      # shell: bash = "bash -eo pipefail": the wrapper's exit code is the
+      # step's, not tee's (the default "bash -e" would turn a failed
+      # deployment or rollback green).
       - name: Deploy through the aquaops-k3s-deploy wrapper
+        shell: bash
         env:
           SHA: ${{ needs.policy.outputs.sha }}
           ENV_NAME: ${{ needs.policy.outputs.environment }}
@@ -142,5 +146,5 @@ jobs:
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [[ "$PUSHED_AT" =~ ^[0-9]+$ ]] && [ "$ENV_NAME" = rc11 ] \
             || { echo "::error::invalid policy outputs"; exit 1; }
           printf '%s\n%s\n' "$DEPLOY_TOKEN" "$GHCR_USERNAME" \
-            | sudo -n -u aquaops-k3s-deploy /usr/local/sbin/aquaops-k3s-deploy "$ENV_NAME" "$SHA" "$PUSHED_AT" \
+            | sudo -n /usr/local/sbin/aquaops-k3s-deploy "$ENV_NAME" "$SHA" "$PUSHED_AT" \
             | tee -a "$GITHUB_STEP_SUMMARY"

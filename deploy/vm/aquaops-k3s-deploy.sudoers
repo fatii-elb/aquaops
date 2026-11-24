@@ -1,0 +1,36 @@
+# AquaOps: the ONLY sudo right of the k3s runner account.
+# Card SCRUM-56 / NFR-09 · E5. Installation and checks: deploy/vm/README-k3s-runner.md.
+#
+# Installed by the administrator of the k3s host as
+# /etc/sudoers.d/aquaops-k3s-deploy (root:root, mode 440), after
+# "visudo -cf" on this file.
+#
+# aquaops-k3s-runner may run /usr/local/sbin/aquaops-k3s-deploy as root,
+# without password, with exactly "rc11 <40-hex SHA> <9 to 11 digits>".
+# Nothing else: no other command, no other environment, no "check" mode, no
+# environment variable (no SETENV tag, env_reset stays on).
+# Root is needed for one action only, the import of the scanned images into
+# k3s containerd; the wrapper runs everything else as aquaops-k3s. The wrapper
+# validates everything again: it is the real boundary, this rule only narrows
+# what may reach it.
+#
+# REQUIRES THE TRADITIONAL SUDO, version 1.9.10 or later (regular expressions
+# in command arguments). Ubuntu 24.04 ships 1.9.15. Check: sudo -V | head -n 1
+# NOT COMPATIBLE WITH SUDO-RS (default of Ubuntu 25.10 and later): its visudo
+# rejects both active lines, so this file cannot be installed there by
+# mistake. With sudo-rs, replace BOTH active lines with the commented rule at
+# the end: every argument then reaches the wrapper, which refuses all but
+# "rc11 <sha> <digits>".
+#
+# sudo matches the expression against all arguments joined by spaces: one
+# argument "rc11 <sha> <n>" also matches; the wrapper accepts exactly three
+# separate arguments, so that case is refused there.
+#
+# The token arrives on stdin: never record stdin or output of this command.
+# sudo still logs the command line (environment, SHA, push time: nothing secret).
+
+Defaults!/usr/local/sbin/aquaops-k3s-deploy !log_input, !log_output
+aquaops-k3s-runner ALL=(root) NOPASSWD: /usr/local/sbin/aquaops-k3s-deploy ^rc11 [0-9a-f]{40} [0-9]{9,11}$
+
+# sudo-rs only (replace BOTH lines above with this one):
+# aquaops-k3s-runner ALL=(root) NOPASSWD: /usr/local/sbin/aquaops-k3s-deploy
