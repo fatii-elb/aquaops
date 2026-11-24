@@ -74,4 +74,38 @@ class MeasureProcessorTests {
         assertTrue(recus.isEmpty());
         assertEquals(1, processeur.rejectedCount());
     }
+
+    // RC-04 : un lot Kafka ; une mesure invalide ou inconvertible est rejetee seule, le reste passe en une fois.
+
+    @Test
+    void unLotEnvoieSesMesuresValidesEnUneFoisEtRejetteLesAutres() {
+        List<List<Reading>> appels = new ArrayList<>();
+        MeasureProcessor parLot = new MeasureProcessor(new MeasureValidator(), new ma.aquaops.telemetry.readings.MeasureSink() {
+            @Override
+            public void record(Reading reading) {
+                throw new AssertionError("le lot doit passer par recordAll");
+            }
+
+            @Override
+            public void recordAll(List<Reading> readings) {
+                appels.add(List.copyOf(readings));
+            }
+        });
+        Map<String, Object> invalide = pression();
+        invalide.put("value", "abc");
+        Map<String, Object> dateFausse = pression();
+        dateFausse.put("measuredAt", "pas une date");
+
+        int acceptees = parLot.processAll(List.of(
+                new MeasureProcessor.Incoming(pression(), new KafkaSource(0, 1L, 1L)),
+                new MeasureProcessor.Incoming(invalide, new KafkaSource(0, 2L, 2L)),
+                new MeasureProcessor.Incoming(dateFausse, new KafkaSource(0, 3L, 3L)),
+                new MeasureProcessor.Incoming(pression(), new KafkaSource(0, 4L, 4L))));
+
+        assertEquals(2, acceptees);
+        assertEquals(1, appels.size());
+        assertEquals(List.of(1L, 4L), appels.get(0).stream().map(r -> r.sourceOffset).toList());
+        assertEquals(2, parLot.acceptedCount());
+        assertEquals(2, parLot.rejectedCount());
+    }
 }
