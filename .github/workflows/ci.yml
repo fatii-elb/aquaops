@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false            # one failing service does not hide the others
       matrix:
-        service: [detection-service, gateway, simulator]
+        service: [detection-service, gateway, simulator, eureka-server]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
