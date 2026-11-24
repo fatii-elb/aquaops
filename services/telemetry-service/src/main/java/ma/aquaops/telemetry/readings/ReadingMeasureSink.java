@@ -9,6 +9,8 @@ import org.springframework.stereotype.Component;
  * Implementation reelle du sink : enregistre chaque mesure valide en base.
  * Si le meme message Kafka arrive deux fois (reprise apres l'arret d'un pod), la base le refuse
  * (contrainte uk_readings_source) et on l'ignore : une mesure, une ligne.
+ * Si l'emetteur renvoie la meme mesure (meme identifiant, reponse HTTP perdue), Kafka recoit
+ * un second message mais la base le refuse (contrainte uk_readings_reading_id) : on l'ignore aussi.
  */
 @Component
 public class ReadingMeasureSink implements MeasureSink {
@@ -30,6 +32,10 @@ public class ReadingMeasureSink implements MeasureSink {
                     reading.sourcePartition, reading.sourceOffset, reading.sourceTimestamp)) {
                 LOG.info("Mesure deja enregistree (message relu apres une reprise), ignoree : partition={}, offset={}",
                         reading.sourcePartition, reading.sourceOffset);
+                return;
+            }
+            if (reading.readingId != null && repository.existsByReadingId(reading.readingId)) {
+                LOG.info("Mesure deja enregistree (renvoyee par l'emetteur), ignoree : readingId={}", reading.readingId);
                 return;
             }
             throw e;

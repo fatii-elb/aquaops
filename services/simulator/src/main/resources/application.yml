@@ -13,6 +13,15 @@ simulator:
   api-key: ${SIMULATOR_API_KEY:local-dev-only}
   interval-ms: ${SIM_INTERVAL_MS:1000}
   request-timeout: ${SIMULATOR_REQUEST_TIMEOUT:5s}
+  # RC-04 / RC-05 : renvoi d'une mesure apres une erreur passagere (429, 5xx, delai), avec le meme
+  # identifiant (en-tete Idempotency-Key) : telemetry ne l'enregistre qu'une fois.
+  request-attempts: ${SIMULATOR_REQUEST_ATTEMPTS:3}
+  retry-backoff: ${SIMULATOR_RETRY_BACKOFF:200ms}
+  # Fils du client HTTP (taille fixe : le client par defaut en creait un par requete en cours).
+  client-threads: ${SIMULATOR_CLIENT_THREADS:8}
+  load:
+    # Requetes en cours au plus pendant un test de charge : la memoire reste bornee.
+    max-in-flight: ${SIMULATOR_MAX_IN_FLIGHT:256}
 eureka:
   client:
     enabled: ${EUREKA_ENABLED:false}

@@ -70,6 +70,10 @@ public class MeasureProcessor {
         String etatPompe = m.get("pumpState") instanceof String p ? p : null;
         Instant date = Instant.parse((String) m.get("measuredAt"));
         Reading reading = new Reading(sensorId, zoneId, (String) m.get("type"), valeur, unite, etatPompe, date);
-        return source == null ? reading : reading.withSource(source.partition(), source.offset(), source.timestamp());
+        if (source == null) {
+            return reading;
+        }
+        return reading.withSource(source.partition(), source.offset(), source.timestamp())
+                .withReadingId(source.readingId());
     }
 }
