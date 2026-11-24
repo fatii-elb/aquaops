@@ -20,10 +20,22 @@ namespace   = "aquaops-rc11"
 # rollback were refused ("exceeded quota"), exit 3 (docs/preuves/NFR-09).
 # NOT schedulable on the VM while Docker Compose keeps 5 GiB: dedicated k3s
 # host of 8 vCPU / 16 GB (deploy/vm/README-k3s-runner.md, section 1).
+# CPU raised for telemetry at 500m / 2 CPU (proposal of E2, branch
+# feature/SCRUM-52-telemetry-cpu): at 200m / 1 a JVM start (about 36 CPU
+# seconds) was throttled 96 % of the time and RC-05 failed; at 500m / 2 RC-05
+# passed in the sandbox (24/11/2026, 31 s, 0 loss) with a quota of 4500m / 26.
+# Sizing: telemetry at 6 replicas, usage measured at 200m / 1 = 2350m / 18.5
+# CPU; at 500m / 2: 4150m / 24.5; plus two extra telemetry pods (rolling
+# update + one stuck pod, as above): + 1000m / + 4 -> 5200m / 29 (rounded).
+# 4500m / 26 left no room for a rollout at 6 replicas. 5200m / 29 itself has
+# NOT been run in the sandbox yet.
+# ORDER: merge and deploy this quota BEFORE the telemetry CPU change. To lower
+# it later: shrink the pods first, lower the quota in a second deployment,
+# otherwise new pods are refused (24/11/2026: kafka-0 "exceeded quota").
 quota = {
-  requests_cpu    = "3000m"
+  requests_cpu    = "5200m"
   requests_memory = "7680Mi"
-  limits_cpu      = "20"
+  limits_cpu      = "29"
   limits_memory   = "14Gi"
   pods            = 24
   pvcs            = 4
