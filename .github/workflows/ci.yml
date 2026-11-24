@@ -67,6 +67,21 @@ jobs:
 
       # "sh ./mvnw": mvnw is stored without the executable bit (mode 644),
       # same convention as deploy/docker/spring-service.Dockerfile.
+      # Network first, retried: the Maven wrapper download (single wget or
+      # curl, no retry) or Maven Central sometimes fails on GitHub runners
+      # ("Build and test" failed in 1 s, before any test, on 17/11 and 19/11).
+      # Only the downloads are retried: the tests below run once.
+      - name: Download Maven and dependencies (retried)
+        working-directory: services/${{ matrix.service }}
+        run: |
+          for attempt in 1 2 3; do
+            sh ./mvnw -B -ntp -q dependency:resolve-plugins dependency:resolve && exit 0
+            echo "::warning::download attempt $attempt failed (network), retrying in 20 s"
+            sleep 20
+          done
+          echo "::error::Maven or the dependencies could not be downloaded 3 times: network failure, not a test failure"
+          exit 1
+
       # verify = compile, all tests (*Test, *Tests), JaCoCo report, jar.
       - name: Build and test
         working-directory: services/${{ matrix.service }}
@@ -136,6 +151,18 @@ jobs:
           java-version: '21'
           cache: maven
           cache-dependency-path: services/${{ matrix.service }}/pom.xml
+
+      # Same retried download as the java job (see there).
+      - name: Download Maven and dependencies (retried)
+        working-directory: services/${{ matrix.service }}
+        run: |
+          for attempt in 1 2 3; do
+            sh ./mvnw -B -ntp -q dependency:resolve-plugins dependency:resolve && exit 0
+            echo "::warning::download attempt $attempt failed (network), retrying in 20 s"
+            sleep 20
+          done
+          echo "::error::Maven or the dependencies could not be downloaded 3 times: network failure, not a test failure"
+          exit 1
 
       - name: Build and test
         working-directory: services/${{ matrix.service }}
