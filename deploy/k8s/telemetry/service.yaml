@@ -39,3 +39,25 @@ spec:
         target:
           type: Utilization
           averageUtilization: 70
+  # Montée progressive : au plus 1 pod toutes les 60 s (RC-05 sur k3s, 19-23/11/2026).
+  # Par défaut, le HPA lançait 4 à 5 JVM d'un coup (2 -> 6 en 50 s) : leurs démarrages prenaient
+  # le CPU des pods qui travaillaient (débit stocké à 20-37 %, 30 % des envois perdus) et
+  # retardaient le pod de remplacement (81 s). Avec 1 pod / 60 s : rétabli en 12 s, perte 30 % -> 1,2 %.
+  # La descente garde le comportement par défaut de Kubernetes, écrit ici en entier : sinon le
+  # serveur le complète lui-même et Terraform (kubernetes_manifest, deploy/terraform/environment/
+  # e2_services.tf) refuse l'apply (« inconsistent result after apply », bac à sable, 23/11/2026).
+  # Fenêtre de stabilisation de la descente : 300 s par défaut (non écrite, le serveur ne l'ajoute pas).
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      selectPolicy: Max
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+    scaleDown:
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
