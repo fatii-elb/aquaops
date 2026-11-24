@@ -1,6 +1,9 @@
 package ma.aquaops.telemetry.validation;
 
+import java.time.DateTimeException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import ma.aquaops.telemetry.readings.MeasureSink;
@@ -36,11 +39,7 @@ public class MeasureProcessor {
     public boolean process(Map<String, Object> mesure, KafkaSource source) {
         ValidationResult resultat = validator.validate(mesure);
         if (!resultat.isValid()) {
-            rejected.incrementAndGet();
-            LOG.warn("Mesure rejetée : causes={}, sensorId={}, measuredAt={}",
-                    resultat.errors(),
-                    mesure == null ? null : mesure.get("sensorId"),
-                    mesure == null ? null : mesure.get("measuredAt"));
+            rejeter(resultat, mesure);
             return false;
         }
         sink.record(versReading(mesure, source));
@@ -48,10 +47,45 @@ public class MeasureProcessor {
         return true;
     }
 
+    /** Une mesure lue sur Kafka avec son origine (lot de SensorReadingsConsumer). */
+    public record Incoming(Map<String, Object> mesure, KafkaSource source) { }
+
+    /**
+     * RC-04 : un lot Kafka. Chaque mesure est validee comme dans process() ; les valides partent au
+     * sink en une fois (une transaction). Une mesure invalide ou inconvertible est rejetee seule :
+     * elle ne bloque pas le lot. Retourne le nombre de mesures acceptees.
+     */
+    public int processAll(List<Incoming> lot) {
+        List<Reading> valides = new ArrayList<>(lot.size());
+        for (Incoming entree : lot) {
+            ValidationResult resultat = validator.validate(entree.mesure());
+            if (!resultat.isValid()) {
+                rejeter(resultat, entree.mesure());
+                continue;
+            }
+            try {
+                valides.add(versReading(entree.mesure(), entree.source()));
+            } catch (IllegalArgumentException | ClassCastException | NullPointerException | DateTimeException e) {
+                reject("mesure inconvertible (" + e.getClass().getSimpleName() + ")");
+            }
+        }
+        sink.recordAll(valides);
+        accepted.addAndGet(valides.size());
+        return valides.size();
+    }
+
     /** Rejette un message illisible (JSON invalide) : journal et compteur. */
     public void reject(String cause) {
         rejected.incrementAndGet();
         LOG.warn("Message rejeté : cause={}", cause);
+    }
+
+    private void rejeter(ValidationResult resultat, Map<String, Object> mesure) {
+        rejected.incrementAndGet();
+        LOG.warn("Mesure rejetée : causes={}, sensorId={}, measuredAt={}",
+                resultat.errors(),
+                mesure == null ? null : mesure.get("sensorId"),
+                mesure == null ? null : mesure.get("measuredAt"));
     }
 
     public long acceptedCount() {

@@ -74,4 +74,16 @@ class SensorReadingsSourceTests {
         assertEquals(1, recus.size());
         assertNull(recus.get(0).readingId);
     }
+
+    @Test
+    void unLotKafkaGardeChaqueOrigineEtRejetteLeMessageIllisible() {
+        ConsumerRecord<String, String> illisible = new ConsumerRecord<>("sensor-readings", 1, 8L, "12", "{pas du json");
+        ConsumerRecord<String, String> autre = new ConsumerRecord<>("sensor-readings", 1, 9L, "12", MESURE);
+        consommateur.onMessages(List.of(message(ID), illisible, autre));
+        assertEquals(2, recus.size());
+        assertEquals(ID, recus.get(0).readingId);
+        assertEquals(7L, recus.get(0).sourceOffset);
+        assertEquals(9L, recus.get(1).sourceOffset);
+        assertEquals(1, consommateur.rejectedCount());
+    }
 }

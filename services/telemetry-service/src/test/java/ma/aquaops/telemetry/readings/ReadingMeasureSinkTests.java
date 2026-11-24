@@ -1,13 +1,16 @@
 package ma.aquaops.telemetry.readings;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Instant;
+import java.util.List;
 import ma.aquaops.telemetry.TelemetryServiceApplication;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** NFR-05 : un message Kafka relu apres une reprise ne cree qu'une seule ligne. Comme ReadingApiTests : base PostgreSQL. */
@@ -87,5 +90,51 @@ class ReadingMeasureSinkTests {
         sink.record(mesure().withSource(0, 50L, 1_700_000_000_000L));
         sink.record(mesure().withSource(0, 51L, 1_700_000_000_005L));
         assertEquals(2, lignes());
+    }
+
+    // RC-04 : un lot Kafka est ecrit en une transaction ; un doublon dans le lot ne perd ni ne double rien.
+
+    @Test
+    void unLotEstStockeEnEntier() {
+        sink.recordAll(List.of(
+                mesure().withSource(1, 10L, 1_700_000_000_010L).withReadingId(ID_A),
+                mesure().withSource(1, 11L, 1_700_000_000_011L).withReadingId(ID_B),
+                mesure().withSource(1, 12L, 1_700_000_000_012L)));
+        assertEquals(3, lignes());
+    }
+
+    @Test
+    void unLotRejoueDejaEnPartieStockeNeDoublePas() {
+        sink.record(mesure().withSource(1, 10L, 1_700_000_000_010L));
+        sink.recordAll(List.of(
+                mesure().withSource(1, 10L, 1_700_000_000_010L),
+                mesure().withSource(1, 11L, 1_700_000_000_011L),
+                mesure().withSource(1, 12L, 1_700_000_000_012L)));
+        assertEquals(3, lignes());
+    }
+
+    @Test
+    void laMemeMesureDeuxFoisDansUnLotNEstStockeeQuUneFois() {
+        sink.recordAll(List.of(
+                mesure().withSource(1, 20L, 1_700_000_000_020L).withReadingId(ID_A),
+                mesure().withSource(1, 21L, 1_700_000_000_021L).withReadingId(ID_A),
+                mesure().withSource(1, 22L, 1_700_000_000_022L).withReadingId(ID_B)));
+        assertEquals(2, lignes());
+    }
+
+    @Test
+    void unLotVideNeFaitRien() {
+        sink.recordAll(List.of());
+        assertEquals(0, lignes());
+    }
+
+    @Test
+    void uneErreurQuiNEstPasUnDoublonRemontePourQueKafkaRejoueLeLot() {
+        Reading sansType = new Reading(SENSOR, 3L, null, 2.4, "bar", null, T).withSource(1, 31L, 1_700_000_000_031L);
+        assertThrows(DataIntegrityViolationException.class, () -> sink.recordAll(List.of(
+                mesure().withSource(1, 30L, 1_700_000_000_030L), sansType)));
+        // Lot rejoue par Kafka (sans la mesure fautive ici) : la mesure deja ecrite n'est pas doublee.
+        sink.recordAll(List.of(mesure().withSource(1, 30L, 1_700_000_000_030L)));
+        assertEquals(1, lignes());
     }
 }
