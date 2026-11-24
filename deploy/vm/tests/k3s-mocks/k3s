@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Test double of "k3s": records the call and the archive it is asked to import.
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+printf 'CALL k3s %s | user=%s\n' "$*" "$(id -un)" >> "$MOCK_LOG"
+case "$*" in
+  --version) echo "k3s version v1.37.2+k3s1" ;;
+  "ctr -n k8s.io images import "*)
+    [ "${MOCK_IMPORT:-ok}" = ok ] || exit 1
+    printf 'IMPORTED %s\n' "$(cat -- "${*: -1}")" >> "$MOCK_LOG" ;;
+  *) echo "mock k3s: unexpected $*" >&2; exit 99 ;;
+esac

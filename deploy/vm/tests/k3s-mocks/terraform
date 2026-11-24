@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Test double of "terraform" (check mode only).
+here="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+. "$here/mock.conf"
+echo "CALL terraform $*" >> "$MOCK_LOG"
+echo "Terraform v1.17.2"
