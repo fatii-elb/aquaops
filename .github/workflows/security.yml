@@ -116,12 +116,21 @@ jobs:
           cache-dependency-path: services/*/pom.xml
 
       # The same jar the image ships (deploy/docker/spring-service.Dockerfile).
+      # Downloads first, retried (Maven wrapper or Maven Central: this step
+      # failed in 0 s on the scheduled run of 23/11/2026); the build runs once.
       - name: Package the 8 jars
         run: |
           set -euo pipefail
           mkdir -p sca/jars
           for s in services/*/; do
             name="$(basename "$s")"
+            ok=no
+            for attempt in 1 2 3; do
+              if (cd "$s" && sh ./mvnw -B -ntp -q dependency:resolve-plugins dependency:resolve); then ok=yes; break; fi
+              echo "::warning::$name: download attempt $attempt failed (network), retrying in 20 s"
+              sleep 20
+            done
+            [ "$ok" = yes ] || { echo "::error::$name: Maven or the dependencies could not be downloaded 3 times (network, not a scan result)"; exit 1; }
             (cd "$s" && sh ./mvnw -B -ntp -q package -DskipTests)
             set -- "$s"target/*.jar
             [ "$#" -eq 1 ] || { echo "::error::$name: expected one jar, found $*"; exit 1; }
@@ -202,6 +211,23 @@ jobs:
           path: ~/.dependency-check-data
           key: dependency-check-${{ steps.week.outputs.week }}
           restore-keys: dependency-check-
+
+      # Every service's Maven first, retried: the services do not all use the
+      # same Maven (3.9.16 or 3.10.0) and the wrapper downloads it with no
+      # retry. On 24/11/2026 (b4a047b) the 6 services on 3.10.0 failed in
+      # 22 s before any scan, the 2 on 3.9.16 (already downloaded) passed.
+      - name: Download Maven for every service (retried)
+        run: |
+          set -euo pipefail
+          for s in services/*/; do
+            name="$(basename "$s")"; ok=no
+            for attempt in 1 2 3; do
+              if (cd "$s" && sh ./mvnw -B -ntp -q -v > /dev/null); then ok=yes; break; fi
+              echo "::warning::$name: Maven download attempt $attempt failed (network), retrying in 20 s"
+              sleep 20
+            done
+            [ "$ok" = yes ] || { echo "::error::$name: Maven could not be downloaded 3 times (network, not a scan result)"; exit 1; }
+          done
 
       # One update for all services. failOnError (default true): an NVD
       # outage or a rate limit fails here, with the reason in the log.

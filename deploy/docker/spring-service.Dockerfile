@@ -28,8 +28,15 @@ COPY .mvn .mvn
 
 # "sh ./mvnw": mvnw is not executable in Git (mode 644).
 # The cache mount keeps ~/.m2 between builds (BuildKit), outside the image.
+# Downloads only, retried up to 3 times: the Maven wrapper download or Maven
+# Central sometimes fails on GitHub runners (Images run of 19/11/2026: this
+# step failed in 10 s for detection). The build below runs once.
 RUN --mount=type=cache,target=/root/.m2 \
-    sh ./mvnw -B -q dependency:go-offline
+    for attempt in 1 2 3; do \
+      sh ./mvnw -B -q dependency:go-offline && exit 0; \
+      echo "download attempt $attempt failed (network), retrying in 20 s"; sleep 20; \
+    done; \
+    echo "Maven or the dependencies could not be downloaded 3 times (network)"; exit 1
 
 COPY src src
 
