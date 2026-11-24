@@ -38,8 +38,13 @@ spec:
             - name: DB_PASSWORD
               valueFrom: { secretKeyRef: { name: aquaops-db, key: DB_PASSWORD } }
           resources:
-            requests: { cpu: 200m, memory: 384Mi }   # requests obligatoires pour que le HPA calcule l'utilisation CPU
-            limits: { cpu: "1", memory: 768Mi }
+            # requests obligatoires pour que le HPA calcule l'utilisation CPU.
+            # 500m / 2 CPU : à 200m / 1, le démarrage de la JVM (≈ 36 s de CPU) était bridé 96 % du temps,
+            # 102-114 s sous charge, et RC-05 échouait ; à 500m / 2 : 22 s à vide, 28-38 s sous charge,
+            # RC-05 réussi (k3s jetable, 24/11/2026 : 31 s, 0 perte). Le HPA vise 70 % de 500m (350m).
+            # PRÉREQUIS : quota rc11 relevé AVANT (feature/SCRUM-56-rc11-quota-telemetry-cpu, 5200m / 29).
+            requests: { cpu: 500m, memory: 384Mi }
+            limits: { cpu: "2", memory: 768Mi }
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: ["ALL"] }
