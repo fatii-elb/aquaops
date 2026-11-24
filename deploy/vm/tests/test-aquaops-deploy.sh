@@ -18,6 +18,12 @@
 # "check && ok || ko" is intended: ok and ko always succeed.
 # shellcheck disable=SC2015
 set -uo pipefail
+# The sandbox must not depend on the caller's umask. Ubuntu gives ordinary
+# users 002: the test-double folder (first in the wrapper's PATH) was then
+# group-writable, the wrapper rightly refused it as a PATH directory, and 62
+# tests failed although the wrapper was correct. Every mode the tests need
+# is set explicitly below; 022 is the base they assume.
+umask 022
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
@@ -133,7 +139,7 @@ G switch --quiet main
 # $HOME/stub.ctl ($HOME is the wrapper's BASE).
 cat > "$SB/src/deploy/scripts/deploy-test.sh" <<'STUB'
 #!/usr/bin/env bash
-rc=0; echo_token=no; pause=0
+rc=0; echo_token=no; pause=0; hold=no
 [ ! -f "$HOME/stub.ctl" ] || . "$HOME/stub.ctl"
 {
     echo "script=$0"
@@ -145,6 +151,8 @@ rc=0; echo_token=no; pause=0
 } > "$AQUAOPS_STATE_DIR/stub-record"
 [ "$echo_token" = no ] || echo "stub output: token is $GHCR_TOKEN"
 sleep "$pause"
+# hold=yes: wait until the test creates $HOME/stub.go (deterministic concurrency test)
+if [ "$hold" = yes ]; then for _ in $(seq 600); do [ -f "$HOME/stub.go" ] && break; sleep 0.1; done; fi
 exit "$rc"
 STUB
 echo two > "$SB/src/docs/keycloak/marker"
@@ -331,14 +339,22 @@ run "$GOOD_STDIN" "$C2" 1; expect_rc 0 "all paths restored: deployment allowed a
 
 # =============================================================================
 section "6. One deployment at a time"
-flock "$BASE/lock" sleep 3 &
-holder=$!; sleep 0.5
+# Deterministic: the holder keeps the lock until the test releases it, and
+# the first deployment waits in its stub until the second request is done
+# (fixed sleeps raced on loaded hosts: 62-test investigation, Sprint 6).
+wait_locked() { for _ in $(seq 600); do flock -n "$BASE/lock" true || return 0; sleep 0.1; done; return 1; }
+rm -f "$SB/unlock"
+( exec 8> "$BASE/lock"; flock 8; until [ -f "$SB/unlock" ]; do sleep 0.1; done ) &
+holder=$!; wait_locked
 run "$GOOD_STDIN" "$C2" 1; expect_rc 2 "lock already held"; expect_out "another deployment is running" "  clear message"
-wait "$holder"
-ctl "pause=2"
+touch "$SB/unlock"; wait "$holder"; rm -f "$SB/unlock"
+ctl "hold=yes"
+rm -f "$STUB_REC" "$BASE/stub.go"
 ( printf '%b' "$GOOD_STDIN" | "$W" "$C2" 1 > "$SB/p1.out" 2>&1; echo $? > "$SB/p1.rc" ) &
-( sleep 0.7; printf '%b' "$GOOD_STDIN" | "$W" "$C2" 1 > "$SB/p2.out" 2>&1; echo $? > "$SB/p2.rc" ) &
-wait
+first=$!
+for _ in $(seq 600); do [ -f "$STUB_REC" ] && break; sleep 0.1; done
+printf '%b' "$GOOD_STDIN" | "$W" "$C2" 1 > "$SB/p2.out" 2>&1; echo $? > "$SB/p2.rc"
+touch "$BASE/stub.go"; wait "$first"; rm -f "$BASE/stub.go"
 ctl
 r="$(cat "$SB/p1.rc") $(cat "$SB/p2.rc")"
 [ "$r" = "0 2" ] && ok "two simultaneous requests: first deploys, second refused (exit $r)" || ko "simultaneous requests: exit $r"
