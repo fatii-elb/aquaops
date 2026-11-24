@@ -82,6 +82,14 @@ resource "kubernetes_stateful_set_v1" "postgres" {
         container {
           name  = "postgres"
           image = var.infrastructure_images.postgres
+          # max_connections: the default 100 is too low once the telemetry HPA
+          # scales (6 telemetry x 10 Hikari connections + assets 2 x 10 +
+          # detection, incidents, notifications 3 x 10 = 110, plus the pods
+          # of a rolling update). Seen in the sandbox (RC-05, 19/11/2026):
+          # "FATAL: sorry, too many clients already", new telemetry pods
+          # failing at start-up ("Unable to determine Dialect without JDBC
+          # metadata"). 200 leaves room for two rolling-update pods and psql.
+          args = ["postgres", "-c", "max_connections=200"]
 
           port {
             name           = "postgres"
@@ -107,9 +115,10 @@ resource "kubernetes_stateful_set_v1" "postgres" {
             }
           }
 
+          # Sized for up to 200 connections under load (RC-04, RC-05).
           resources {
-            requests = { cpu = "100m", memory = "256Mi" }
-            limits   = { cpu = "500m", memory = "512Mi" }
+            requests = { cpu = "100m", memory = "512Mi" }
+            limits   = { cpu = "1", memory = "1Gi" }
           }
 
           # Read-only image; writable: the data volume, the socket folder, /tmp.

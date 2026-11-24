@@ -120,14 +120,18 @@ resource "kubernetes_stateful_set_v1" "kafka" {
             period_seconds    = 5
             failure_threshold = 36
           }
-          # A real broker request (ApiVersions); the client JVM gets a small heap.
+          # TCP, not a client JVM. The former exec probe
+          # (kafka-broker-api-versions.sh every 15 s) ran inside the broker's
+          # own 1-CPU limit: one run took 18-21 s and as much CPU time, runs
+          # overlapped, the idle broker sat at ~970m and was throttled 30 % of
+          # the time, and producers timed out under load (max.block.ms) in
+          # RC-04 / RC-05 (sandbox, 23/11/2026, docs/preuves/RC-04).
           readiness_probe {
-            exec {
-              command = ["sh", "-c", "KAFKA_HEAP_OPTS='-Xms32m -Xmx64m' /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+            tcp_socket {
+              port = "kafka"
             }
-            period_seconds    = 15
-            timeout_seconds   = 30
-            failure_threshold = 4
+            period_seconds    = 10
+            failure_threshold = 3
           }
           liveness_probe {
             tcp_socket {

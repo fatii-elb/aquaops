@@ -55,7 +55,10 @@ locals {
 
   services = {
     gateway = {
-      memory      = ["256Mi", "512Mi"]
+      memory = ["256Mi", "512Mi"]
+      # CPU limit 2: throttled 24 % of the time at 1 CPU under 500 readings/s
+      # (RC-04 in the sandbox, 23/11/2026); request unchanged.
+      cpu_limit   = "2"
       env         = {} # routing: ConfigMap gateway-routes (below)
       from_config = ["EUREKA_URL", "TELEMETRY_INGEST_RATE_LIMIT"]
       db          = false
@@ -65,6 +68,7 @@ locals {
     # by Keycloak JWTs (same issuer as assets).
     detection = {
       memory      = ["384Mi", "640Mi"]
+      cpu_limit   = "1"
       env         = { DETECTION_DB_URL = "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/aquaops_detection" }
       from_config = ["DB_HOST", "DB_PORT", "KAFKA_BOOTSTRAP_SERVERS", "KEYCLOAK_ISSUER_URI"]
       db          = true
@@ -72,13 +76,15 @@ locals {
     }
     incidents = {
       memory      = ["384Mi", "640Mi"]
+      cpu_limit   = "1"
       env         = { INCIDENTS_DB_URL = "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/aquaops_incidents" }
       from_config = ["DB_HOST", "DB_PORT", "KAFKA_BOOTSTRAP_SERVERS"]
       db          = true
       ingress     = false
     }
     notifications = {
-      memory = ["384Mi", "640Mi"]
+      memory    = ["384Mi", "640Mi"]
+      cpu_limit = "1"
       env = {
         NOTIFICATIONS_DB_URL = "jdbc:postgresql://$(DB_HOST):$(DB_PORT)/aquaops_notifications"
         SPRING_JPA_SHOW_SQL  = "false"
@@ -88,7 +94,12 @@ locals {
       ingress     = false
     }
     simulator = {
-      memory      = ["192Mi", "384Mi"]
+      # OOMKilled at 384Mi under 200 readings/s since it sends through the
+      # gateway over HTTP (RC-05 in the sandbox, 19/11/2026).
+      memory = ["256Mi", "640Mi"]
+      # CPU limit 2: throttled 33 % of the time at 1 CPU while generating
+      # 500 readings/s (RC-04 in the sandbox, 23/11/2026); request unchanged.
+      cpu_limit   = "2"
       env         = {}
       from_config = ["GATEWAY_URL", "EUREKA_ENABLED", "EUREKA_URL"]
       db          = false
@@ -286,7 +297,7 @@ resource "kubernetes_deployment_v1" "service" {
 
           resources {
             requests = { cpu = "100m", memory = each.value.memory[0] }
-            limits   = { cpu = "1", memory = each.value.memory[1] }
+            limits   = { cpu = each.value.cpu_limit, memory = each.value.memory[1] }
           }
 
           security_context {
