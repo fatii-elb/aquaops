@@ -4,9 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import ma.aquaops.telemetry.readings.Reading;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 
 /** NFR-05 : l'origine Kafka du message est conservee sur la mesure enregistree. */
@@ -39,5 +41,37 @@ class SensorReadingsSourceTests {
         assertEquals(false, consommateur.handle("{pas du json", new KafkaSource(0, 1L, 1L)));
         assertTrue(recus.isEmpty());
         assertEquals(1, consommateur.rejectedCount());
+    }
+
+    // RC-04 / RC-05 : l'identifiant de la mesure arrive dans l'en-tete Kafka reading-id, pas dans le JSON.
+    private static final String ID = "3f2b8c1a-1111-4222-8333-444455556666";
+
+    private static ConsumerRecord<String, String> message(String readingIdHeader) {
+        ConsumerRecord<String, String> r = new ConsumerRecord<>("sensor-readings", 0, 7L, "12", MESURE);
+        if (readingIdHeader != null) {
+            r.headers().add(KafkaSource.READING_ID_HEADER, readingIdHeader.getBytes(StandardCharsets.UTF_8));
+        }
+        return r;
+    }
+
+    @Test
+    void lIdentifiantDeLaMesureEstLuDansLEnTeteKafka() {
+        consommateur.onMessage(message(ID));
+        assertEquals(ID, recus.get(0).readingId);
+        assertEquals(7L, recus.get(0).sourceOffset);
+    }
+
+    @Test
+    void sansEnTeteLaMesureEstGardeeSansIdentifiant() {
+        consommateur.onMessage(message(null));
+        assertEquals(1, recus.size());
+        assertNull(recus.get(0).readingId);
+    }
+
+    @Test
+    void unEnTeteMalFormeNEmpechePasDeGarderLaMesure() {
+        consommateur.onMessage(message("x'; drop table readings; --"));
+        assertEquals(1, recus.size());
+        assertNull(recus.get(0).readingId);
     }
 }

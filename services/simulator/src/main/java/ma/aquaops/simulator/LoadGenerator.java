@@ -3,26 +3,44 @@ package ma.aquaops.simulator;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import ma.aquaops.simulator.scenario.Sample;
 import ma.aquaops.simulator.scenario.ScenarioRegistry;
 
-/** Mode charge (NFR-01) : debit soutenu, avec comptage des mesures acceptees par la passerelle. */
+/**
+ * Mode charge (NFR-01) : debit soutenu, avec comptage des mesures acceptees par la passerelle.
+ *
+ * Nombre de requetes en cours BORNE (simulator.load.max-in-flight). Avant (RC-04/RC-05, 23/11/2026) :
+ * le generateur envoyait chaque tranche de 10 ms sans attendre les reponses ; quand la chaine
+ * ralentissait, les requetes en attente s'accumulaient sans limite jusqu'a l'arret du pod faute de
+ * memoire (OOMKilled a 384 Mi puis 640 Mi, meme a 200/s). Desormais, la limite atteinte, il attend :
+ * s'il ne tient pas le debit demande, attempted reste inferieur a rate x seconds (notSent > 0),
+ * ce qui se voit dans le statut au lieu de faire tomber le simulateur.
+ *
+ * attempted, acked et failed comptent des MESURES (une mesure renvoyee apres une erreur passagere
+ * reste une seule mesure, avec le meme identifiant ; retries compte les renvois).
+ */
 @Component
 public class LoadGenerator {
 
     public record Status(boolean running, int rate, int seconds,
                          long attempted, long acked, long failed,
-                         String startedAt, String endedAt) {}
+                         String startedAt, String endedAt,
+                         long inFlight, int maxInFlight, long retries, long notSent) {}
 
     private final SimulatorPublisher publisher;
     private final ScenarioRegistry scenarios;
+    private final int maxInFlight;
+    private final Semaphore permits;
+    private long retriesAtStart;
     private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "load-generator");
         t.setDaemon(true);
@@ -46,9 +64,15 @@ public class LoadGenerator {
     private boolean completionRequested;
 
     public LoadGenerator(SimulatorPublisher publisher,
-                         ScenarioRegistry scenarios) {
+                         ScenarioRegistry scenarios,
+                         @Value("${simulator.load.max-in-flight:256}") int maxInFlight) {
+        if (maxInFlight < 1) {
+            throw new IllegalArgumentException("simulator.load.max-in-flight doit valoir au moins 1");
+        }
         this.publisher = publisher;
         this.scenarios = scenarios;
+        this.maxInFlight = maxInFlight;
+        this.permits = new Semaphore(maxInFlight);
     }
 
     /**
@@ -73,6 +97,7 @@ public class LoadGenerator {
         acked.set(0);
         failed.set(0);
         inFlight.set(0);
+        retriesAtStart = publisher.retries();
         completionRequested = false;
         endedAt = null;
         startedAt = Instant.now();
@@ -89,9 +114,14 @@ public class LoadGenerator {
     }
 
     public Status status() {
+        long expected = startedAt == null ? 0
+                : running ? rate * Math.min(System.nanoTime() - startNanos, durationNanos) / 1_000_000_000L
+                : (long) rate * seconds;
         return new Status(running, rate, seconds, attempted.get(), acked.get(), failed.get(),
                 startedAt == null ? null : startedAt.toString(),
-                endedAt == null ? null : endedAt.toString());
+                endedAt == null ? null : endedAt.toString(),
+                inFlight.get(), maxInFlight, publisher.retries() - retriesAtStart,
+                Math.max(0, expected - attempted.get()));
     }
 
     private synchronized void tick() {
@@ -103,7 +133,9 @@ public class LoadGenerator {
         long target = rate * window / 1_000_000_000L;
         List<Sensor> capteurs = publisher.capteurs();
 
-        while (attempted.get() < target) {
+        // Limite atteinte : on n'envoie plus rien dans cette tranche ; les mesures en retard
+        // partiront des que des reponses arrivent (jamais au-dela de maxInFlight en cours).
+        while (attempted.get() < target && permits.tryAcquire()) {
             Sensor s = capteurs.get((int) (index++ % capteurs.size()));
             Sample mesure = scenarios.mesure(s.type());
             attempted.incrementAndGet();
@@ -115,19 +147,23 @@ public class LoadGenerator {
                     } else {
                         failed.incrementAndGet();
                     }
-                    if (inFlight.decrementAndGet() == 0) {
-                        finishIfReady();
-                    }
+                    done();
                 });
             } catch (RuntimeException e) {
                 failed.incrementAndGet();
-                if (inFlight.decrementAndGet() == 0) {
-                    finishIfReady();
-                }
+                done();
             }
         }
         if (elapsed >= durationNanos) {
             requestCompletion();
+        }
+    }
+
+    /** Fin d'une mesure (acceptee ou en echec definitif) : libere sa place. */
+    private void done() {
+        permits.release();
+        if (inFlight.decrementAndGet() == 0) {
+            finishIfReady();
         }
     }
 

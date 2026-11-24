@@ -14,9 +14,14 @@ import java.time.Instant;
 @Entity
 @Table(name = "readings",
         indexes = @Index(name = "idx_readings_sensor_time", columnList = "sensor_id, measured_at"),
-        // NFR-05 : un message Kafka relu apres une reprise ne cree pas une deuxieme ligne (colonnes vides = pas de contrainte).
-        uniqueConstraints = @UniqueConstraint(name = "uk_readings_source",
-                columnNames = {"source_partition", "source_offset", "source_timestamp"}))
+        uniqueConstraints = {
+                // NFR-05 : un message Kafka relu apres une reprise ne cree pas une deuxieme ligne (colonnes vides = pas de contrainte).
+                @UniqueConstraint(name = "uk_readings_source",
+                        columnNames = {"source_partition", "source_offset", "source_timestamp"}),
+                // RC-04/RC-05 : une mesure renvoyee par l'emetteur (meme Idempotency-Key) ne cree pas une deuxieme ligne.
+                // Colonne vide (ancien emetteur) = pas de contrainte : PostgreSQL ne compare pas les NULL.
+                @UniqueConstraint(name = "uk_readings_reading_id", columnNames = {"reading_id"})
+        })
 public class Reading {
 
     @Id
@@ -56,6 +61,10 @@ public class Reading {
     @Column(name = "source_timestamp")
     public Long sourceTimestamp;
 
+    /** Identifiant de la mesure donne par l'emetteur (UUID, en-tete Idempotency-Key). Vide s'il n'en donne pas. */
+    @Column(name = "reading_id", length = 36)
+    public String readingId;
+
     public Reading() {
     }
 
@@ -75,6 +84,12 @@ public class Reading {
         this.sourcePartition = partition;
         this.sourceOffset = offset;
         this.sourceTimestamp = timestamp;
+        return this;
+    }
+
+    /** Note l'identifiant de la mesure (voir la contrainte uk_readings_reading_id). */
+    public Reading withReadingId(String readingId) {
+        this.readingId = readingId;
         return this;
     }
 }

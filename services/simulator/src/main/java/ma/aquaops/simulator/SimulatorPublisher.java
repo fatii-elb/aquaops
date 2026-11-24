@@ -67,11 +67,18 @@ public class SimulatorPublisher {
     }
 
     java.util.concurrent.CompletableFuture<Void> envoyer(Sensor sensor, Sample measure) {
-        return telemetry.publish(enJson(sensor, measure));
+        // Un identifiant par mesure (pas par tentative) : la passerelle peut recevoir la mesure
+        // plusieurs fois (nouvelle tentative), telemetry ne l'enregistre qu'une fois.
+        return telemetry.publish(enJson(sensor, measure), java.util.UUID.randomUUID().toString());
     }
 
     void setPause(boolean pause) {
         this.pause = pause;
+    }
+
+    /** Renvois effectues par le client (erreurs passageres), pour le statut du test de charge. */
+    long retries() {
+        return telemetry.retries();
     }
 
     List<Sensor> capteurs() {

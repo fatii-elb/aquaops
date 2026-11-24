@@ -13,4 +13,7 @@ public interface ReadingRepository extends JpaRepository<Reading, Long> {
     /** Vrai si ce message Kafka est deja enregistre (reprise apres une panne). */
     boolean existsBySourcePartitionAndSourceOffsetAndSourceTimestamp(
             Integer sourcePartition, Long sourceOffset, Long sourceTimestamp);
+
+    /** Vrai si cette mesure (identifiant donne par l'emetteur) est deja enregistree : envoi repete. */
+    boolean existsByReadingId(String readingId);
 }

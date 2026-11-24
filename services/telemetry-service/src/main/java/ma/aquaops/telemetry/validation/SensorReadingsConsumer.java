@@ -1,7 +1,9 @@
 package ma.aquaops.telemetry.validation;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Header;
 import ma.aquaops.telemetry.readings.MeasureSink;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -22,10 +24,24 @@ public class SensorReadingsConsumer {
         this.processor = new MeasureProcessor(new MeasureValidator(), sink);
     }
 
-    /** La partition, l'offset et l'horodatage du message servent a ignorer un message livre deux fois. */
+    /**
+     * La partition, l'offset et l'horodatage du message servent a ignorer un message livre deux fois ;
+     * l'en-tete reading-id (s'il est present et bien forme) sert a ignorer une mesure envoyee deux fois.
+     */
     @KafkaListener(topics = "sensor-readings", groupId = "telemetry-validation")
     public void onMessage(ConsumerRecord<String, String> record) {
-        handle(record.value(), new KafkaSource(record.partition(), record.offset(), record.timestamp()));
+        handle(record.value(), new KafkaSource(record.partition(), record.offset(), record.timestamp(),
+                readingId(record)));
+    }
+
+    /** L'identifiant de la mesure, ou null : en-tete absent ou mal forme (la mesure est gardee, sans lui). */
+    static String readingId(ConsumerRecord<String, String> record) {
+        Header header = record.headers().lastHeader(KafkaSource.READING_ID_HEADER);
+        if (header == null || header.value() == null) {
+            return null;
+        }
+        String value = new String(header.value(), StandardCharsets.UTF_8);
+        return KafkaSource.isReadingId(value) ? value : null;
     }
 
     /** Retourne true si la mesure a été acceptée. */

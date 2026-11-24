@@ -62,4 +62,30 @@ class ReadingMeasureSinkTests {
         sink.record(mesure());
         assertEquals(2, lignes());
     }
+
+    // RC-04 / RC-05 : l'emetteur renvoie une mesure dont il n'a pas recu la reponse. Kafka recoit deux
+    // messages DIFFERENTS (offsets differents) ; l'identifiant de la mesure est le meme : une seule ligne.
+    private static final String ID_A = "6c8e1d10-0000-4000-8000-000000000001";
+    private static final String ID_B = "6c8e1d10-0000-4000-8000-000000000002";
+
+    @Test
+    void laMemeMesureEnvoyeeDeuxFoisNEstStockeeQuUneFois() {
+        sink.record(mesure().withSource(0, 50L, 1_700_000_000_000L).withReadingId(ID_A));
+        sink.record(mesure().withSource(0, 51L, 1_700_000_000_005L).withReadingId(ID_A));
+        assertEquals(1, lignes());
+    }
+
+    @Test
+    void deuxMesuresDifferentesSontToutesLesDeuxStockees() {
+        sink.record(mesure().withSource(0, 50L, 1_700_000_000_000L).withReadingId(ID_A));
+        sink.record(mesure().withSource(0, 51L, 1_700_000_000_005L).withReadingId(ID_B));
+        assertEquals(2, lignes());
+    }
+
+    @Test
+    void sansIdentifiantDeMesureLeComportementDOrigineEstGarde() {
+        sink.record(mesure().withSource(0, 50L, 1_700_000_000_000L));
+        sink.record(mesure().withSource(0, 51L, 1_700_000_000_005L));
+        assertEquals(2, lignes());
+    }
 }
