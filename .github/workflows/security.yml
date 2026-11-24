@@ -229,11 +229,38 @@ jobs:
                   -DossIndexAnalyzerEnabled=false -DnodeAnalyzerEnabled=false \
                   -DnodeAuditAnalyzerEnabled=false -DretireJsAnalyzerEnabled=false \
                   -DsuppressionFile="$GITHUB_WORKSPACE/deploy/sca/dependency-check-suppressions.xml" \
-                  -Dformats=HTML,JSON -DoutputDirectory="$GITHUB_WORKSPACE/dc-reports/$name"); then
+                  -Dformats=HTML,JSON -Dodc.outputDirectory="$GITHUB_WORKSPACE/dc-reports/$name"); then
               failed="$failed $name"
             fi
           done
           [ -z "$failed" ] || { echo "::error::Dependency-Check failed (CVSS >= 9 or scan error) for:$failed"; exit 1; }
+
+      # A green scan must have read something with fresh NVD data. Fails
+      # closed: a missing report, an empty dependency list, no NVD entry, an
+      # unreadable or old NVD timestamp (or a report format this step does not
+      # know) all fail the job. The output folder property is
+      # odc.outputDirectory: a plain -DoutputDirectory is ignored by the plugin
+      # (the reports then stay in each target/ and nothing is uploaded).
+      - name: Completeness check (reports, dependencies, NVD freshness)
+        run: |
+          set -euo pipefail
+          now="$(date -u +%s)"; bad=""; n=0
+          for s in services/*/; do
+            name="$(basename "$s")"; r="dc-reports/$name/dependency-check-report.json"; n=$((n + 1))
+            if [ ! -s "$r" ]; then echo "::error::$name: no Dependency-Check JSON report"; bad="$bad $name"; continue; fi
+            deps="$(jq '[.dependencies[]?] | length' "$r")"
+            vulns="$(jq '[.dependencies[]?.vulnerabilities[]?] | length' "$r")"
+            nvd="$(jq -r '[.scanInfo.dataSource[]? | select(.name | test("NVD"; "i")) | .timestamp] | max // empty' "$r")"
+            age=""
+            # ISO_DATE_TIME of a ZonedDateTime: may end in a zone id, "...Z[UTC]".
+            if [ -n "$nvd" ] && t="$(date -u -d "${nvd%%\[*}" +%s 2> /dev/null)"; then age=$(( (now - t) / 86400 )); fi
+            echo "$name: $deps dependencies, $vulns vulnerabilities, NVD data ${nvd:-MISSING} (${age:-?} days old)"
+            [ "$deps" -ge 10 ] || { echo "::error::$name: only $deps dependencies read: incomplete scan"; bad="$bad $name"; }
+            [ -n "$age" ] && [ "$age" -le 8 ] || { echo "::error::$name: NVD data missing, unreadable or older than 8 days: incomplete scan"; bad="$bad $name"; }
+          done
+          [ "$n" -eq 8 ] || { echo "::error::expected 8 services, found $n"; exit 1; }
+          [ -z "$bad" ] || { echo "::error::Dependency-Check incomplete for:$bad"; exit 1; }
+          echo "Dependency-Check complete: $n services, fresh NVD data"
 
       - name: Upload Dependency-Check reports
         if: always()
@@ -241,5 +268,5 @@ jobs:
         with:
           name: sca-dependency-check
           path: dc-reports/
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 30

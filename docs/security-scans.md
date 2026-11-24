@@ -61,6 +61,27 @@ Mesuré sur ce dépôt (16/11/2026) :
 - `sca-owasp` ne tourne **pas** sur les pull requests : les secrets ne sont pas
   donnés aux PR de forks, et la clé ne doit pas l'être. Les PR ont `sca-trivy`.
 - OSS Index (Sonatype) est désactivé : il demande désormais un compte.
+- **Contrôle de complétude de Dependency-Check** (ajouté le 19/11/2026) : un
+  job vert exige, pour **chacun des 8 services**, un rapport JSON, au moins
+  10 dépendances lues et des données NVD datant de **8 jours au plus**
+  (`scanInfo.dataSource`, entrées « NVD API Last Checked / Last Modified »).
+  Tout le reste échoue, y compris un format de rapport inconnu (le contrôle
+  échoue fermé). Testé sur 11 cas (rapport manquant, 0 dépendance, NVD absente,
+  vieille ou illisible, JSON invalide, 9 services, horodatages `Z[UTC]` et
+  `+01:00[Europe/Paris]`).
+
+### Correctif du 19/11/2026 : rapports Dependency-Check jamais publiés
+
+Depuis l'ajout du secret `NVD_API_KEY`, le job `sca-owasp` était **vert sur
+`main`** mais l'exécution n'avait **aucun artefact** `sca-dependency-check`.
+Cause : le plugin lie le dossier de sortie à la propriété
+`odc.outputDirectory` (vérifié dans le `plugin.xml` de
+`dependency-check-maven` 13.0.0) ; `-DoutputDirectory` était ignoré, les
+rapports restaient dans `services/*/target/` et l'envoi
+(`if-no-files-found: ignore`) ne trouvait rien. La barrière CVSS ≥ 9
+fonctionnait, mais sans preuve consultable ni vérification que chaque service
+avait été analysé. Corrigé : `-Dodc.outputDirectory`, contrôle de complétude
+ci-dessus, `if-no-files-found: warn`.
 
 ## Résultats au 16/11/2026 (commit `e02eda3`, exécutions locales)
 
@@ -74,14 +95,50 @@ Mesuré sur ce dépôt (16/11/2026) :
 | CVE-2026-108106, CVE-2026-93451 | snappy-java | 1.1.10.7 | 1.1.10.9 | client Kafka |
 | CVE-2026-102554 | guava | 33.0.0-jre | 33.7.2 | client / serveur Eureka |
 
-Action : monter la version de patch de Spring Boot / Spring Cloud dans le
-`pom.xml` de chaque service (les versions gérées suivent), **par le
-responsable de chaque service** (E1 à E6), puis vérifier avec le job
-`sca-trivy`. Les images (Trivy, `publish.yml`) montrent les mêmes HIGH :
-8 à 13 par image, 0 CRITICAL.
+Les images (Trivy, `publish.yml`) montrent les mêmes HIGH : 8 à 13 par
+image, 0 CRITICAL.
 
-Dependency-Check : **non exécuté** (pas de clé NVD). À faire dès que la clé
-existe : lancer le workflow à la main et joindre le rapport.
+### Plan de correction par responsable (vérifié sur Maven Central le 19/11/2026)
+
+Ce que chaque montée de version corrige réellement :
+
+| Changement | Corrige | Ne corrige pas |
+| --- | --- | --- |
+| Spring Boot **4.1.1 → 4.1.2** (parent du `pom.xml`) | jackson 2.21.5 → **2.21.7**, `tools.jackson` 3.1.5 → **3.1.7** (10 HIGH sur 14) ; Tomcat géré **11.0.27** | lz4 : Kafka 4.2.2 apporte lz4-java **1.11.2** (corrigé en 1.11.4) ; snappy-java reste **1.1.10.7** |
+| Spring Cloud **2025.1.3 → 2025.1.4** | (alignement) | guava : Eureka reste en **2.0.6**, guava 33.0.0-jre |
+| `<dependencyManagement>` : `com.google.guava:guava` **33.7.2-jre** | CVE-2026-102554 (`eureka-server` seulement : le client Eureka n'apporte pas guava) | — |
+| `<dependencyManagement>` : `at.yawk.lz4:lz4-java` **1.11.4**, `org.xerial.snappy:snappy-java` **1.1.10.9** (coordonnées utilisées par kafka-clients 4.2.2) | CVE-2026-106451, CVE-2026-108106, CVE-2026-93451 (services avec Kafka) | — |
+
+Une entrée déclarée directement dans `<dependencyManagement>` l'emporte sur
+les BOM importés (Spring Cloud) et sur le parent : la placer avant l'import
+de `spring-cloud-dependencies`, avec un commentaire « à retirer quand la
+version gérée est corrigée ».
+
+**Piège à éviter :** sept `pom.xml` fixent `<tomcat.version>11.0.25</tomcat.version>`
+(correctif CRITICAL du Sprint 4). Avec Boot 4.1.2, ce réglage **rétrograde**
+Tomcat de 11.0.27 à 11.0.25 : **le supprimer** en même temps que la montée.
+
+Mesuré le 19/11/2026 (Trivy 0.76.2 sur les jars des images de `main` à
+`4572bca`, mêmes options que `sca-trivy`) : **0 CRITICAL, 9 CVE distinctes**,
+HIGH par service ci-dessous. guava n'est présent **que dans `eureka-server`** ;
+`simulator` n'embarque plus Kafka (envoi HTTP par la gateway) : ni lz4, ni snappy.
+
+| Service | Responsable | HIGH à `4572bca` | À faire dans son `pom.xml` | État |
+| --- | --- | --- | --- | --- |
+| `gateway` | E5 | 10 (Jackson) | Boot 4.1.2, Cloud 2025.1.4 | **Fait** (PR `feature/TECH-sca-e5-deps`) : **0 HIGH**, 15 tests OK |
+| `eureka-server` | E5 | 11 (Jackson, guava) | Boot 4.1.2, Cloud 2025.1.4, guava ; retirer `tomcat.version` et `freemarker.version` | **Fait** (même PR) : **0 HIGH**, 6 tests OK, Tomcat 11.0.27 |
+| `telemetry-service` | E1 | 13 (Jackson, lz4, snappy) | Boot 4.1.2, Cloud 2025.1.4, lz4, snappy ; retirer `tomcat.version` | À faire |
+| `simulator` | E1 | 10 (Jackson) | Boot 4.1.2, Cloud 2025.1.4 ; retirer `tomcat.version` | À faire |
+| `assets-service` | E2 | 13 (Jackson, lz4, snappy) | Boot 4.1.2, Cloud 2025.1.4, lz4, snappy ; retirer `tomcat.version` | À faire |
+| `detection-service` | E3 | 8 (Jackson 3, lz4, snappy) | Boot 4.1.2, lz4, snappy ; retirer `tomcat.version` | À faire |
+| `incidents-service` | E4 | 13 (Jackson, lz4, snappy) | Boot 4.1.2, Cloud 2025.1.4, lz4, snappy ; retirer `tomcat.version` | À faire |
+| `notifications-service` | E6 | 13 (Jackson, lz4, snappy) | idem | À faire |
+
+Vérification après chaque PR : job `sca-trivy` de la PR (0 CRITICAL, plus
+aucune HIGH listée ci-dessus) et tests du service.
+
+Dependency-Check : rapports disponibles à partir du correctif du 19/11/2026
+(artefact `sca-dependency-check` de l'exécution sur `main`).
 
 ### IaC
 
