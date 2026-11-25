@@ -82,12 +82,14 @@ describe('Administration : page', () => {
     expect(root.textContent).toContain('injoignable');
   });
 
-  it('ouvre la console Keycloak et marque les autres outils « Bientôt disponible »', async () => {
+  it('ouvre Keycloak et les seuils, et marque les autres outils « Bientôt disponible »', async () => {
     const root = await render(() => of([]));
     const links = root.querySelectorAll('a[data-testid="tool-link"]');
-    expect(links).toHaveLength(1);
+    expect(links).toHaveLength(2);
     expect(links[0].getAttribute('href')).toContain('/admin/master/console/#/aquaops');
-    expect(root.querySelectorAll('[data-testid="tool-soon"]')).toHaveLength(3);
+    expect(links[1].getAttribute('href')).toBe('/thresholds');
+    expect(links[1].getAttribute('target')).toBeNull();
+    expect(root.querySelectorAll('[data-testid="tool-soon"]')).toHaveLength(2);
   });
 
   it('précise que la création d\'équipes est indisponible', async () => {

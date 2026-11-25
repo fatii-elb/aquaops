@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { loadAppConfig } from '../../core/app-config';
 import { AppShell } from '../../core/layout/app-shell';
 import { describeHttpError } from '../../shared/http-errors';
@@ -13,7 +14,7 @@ import { ADMIN_TOOLS, TeamSummary, keycloakConsoleUrl, summarizeTeams } from './
  */
 @Component({
   selector: 'app-administration',
-  imports: [AppShell, StateBlock],
+  imports: [AppShell, StateBlock, RouterLink],
   templateUrl: './administration.html',
 })
 export class Administration implements OnInit {
@@ -25,7 +26,7 @@ export class Administration implements OnInit {
   readonly consoleUrl = signal<string | null>(null);
 
   readonly tools = computed(() =>
-    ADMIN_TOOLS.map((tool) => ({ ...tool, href: tool.key === 'keycloak' ? this.consoleUrl() : null })),
+    ADMIN_TOOLS.map((tool) => ({ ...tool, href: tool.key === 'keycloak' ? this.consoleUrl() : tool.key === 'thresholds' ? '/thresholds' : null })),
   );
 
   ngOnInit(): void {
