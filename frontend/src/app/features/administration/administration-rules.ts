@@ -48,7 +48,7 @@ export interface AdminTool {
 
 export const ADMIN_TOOLS: AdminTool[] = [
   { key: 'keycloak', icon: 'manage_accounts', label: 'Utilisateurs et rôles', description: 'Console Keycloak : comptes, rôles, sessions.', soon: false },
-  { key: 'thresholds', icon: 'tune', label: 'Seuils par zone', description: 'Seuils de détection de chaque zone (FR-13).', soon: true },
+  { key: 'thresholds', icon: 'tune', label: 'Seuils par zone', description: 'Seuils de détection de chaque zone (FR-13).', soon: false },
   { key: 'scenarios', icon: 'science', label: 'Scénarios de simulation', description: 'Panneau des scénarios de panne (FR-06).', soon: true },
   { key: 'grafana', icon: 'monitoring', label: 'Grafana', description: 'Tableaux de bord techniques (CPU, mémoire, latence).', soon: true },
 ];

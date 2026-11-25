@@ -9,7 +9,17 @@
       <h2 class="mb-space-md font-headline-md text-headline-md font-bold text-on-surface">Outils</h2>
       <div class="grid grid-cols-1 gap-space-md md:grid-cols-2 xl:grid-cols-4">
         @for (tool of tools(); track tool.key) {
-          @if (tool.href) {
+          @if (tool.key === 'thresholds') {
+            <a routerLink="/thresholds" data-testid="tool-link"
+              class="flex flex-col gap-space-xs rounded-xl bg-surface-container-lowest p-space-lg shadow-sm transition-colors hover:bg-surface-container-low">
+              <span class="material-symbols-outlined text-[24px] text-primary">{{ tool.icon }}</span>
+              <span class="font-label-md text-label-md font-semibold text-on-surface">{{ tool.label }}</span>
+              <span class="font-body-sm text-body-sm text-secondary">{{ tool.description }}</span>
+              <span class="mt-space-xs inline-flex items-center gap-1 font-label-sm text-label-sm font-semibold text-primary">
+                Ouvrir <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+              </span>
+            </a>
+          } @else if (tool.href) {
             <a [href]="tool.href" target="_blank" rel="noopener noreferrer" data-testid="tool-link"
               class="flex flex-col gap-space-xs rounded-xl bg-surface-container-lowest p-space-lg shadow-sm transition-colors hover:bg-surface-container-low">
               <span class="material-symbols-outlined text-[24px] text-primary">{{ tool.icon }}</span>
