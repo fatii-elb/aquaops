@@ -10,6 +10,8 @@ import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.mail.javamail.JavaMailSender;
 
 import java.time.Duration;
 
@@ -28,6 +30,9 @@ class AuditLogTest {
 
     @Autowired
     private KafkaListenerEndpointRegistry registry;
+
+    @MockitoBean
+    private JavaMailSender javaMailSender;
 
     @BeforeEach
     void waitForConsumer() {

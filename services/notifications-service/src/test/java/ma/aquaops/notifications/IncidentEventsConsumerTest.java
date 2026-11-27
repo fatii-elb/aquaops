@@ -10,14 +10,13 @@ import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.mail.javamail.JavaMailSender;
 
 import java.time.Duration;
 
 import static org.awaitility.Awaitility.await;
 
-// earliest pour CE test seulement : le consommateur lit le message meme s'il a ete
-// publie avant l'attribution de sa partition. Sans danger ici : @EmbeddedKafka et
-// @DirtiesContext donnent un broker neuf, le topic ne contient que ce message.
 @SpringBootTest(properties = "spring.kafka.consumer.auto-offset-reset=earliest")
 @EmbeddedKafka(partitions = 1, topics = "incident-events", bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 @DirtiesContext
@@ -32,9 +31,11 @@ class IncidentEventsConsumerTest {
     @Autowired
     private KafkaListenerEndpointRegistry registry;
 
+    @MockitoBean
+    private JavaMailSender javaMailSender;
+
     @BeforeEach
     void waitForConsumer() {
-        // On n'envoie rien tant que le consommateur n'est pas vraiment prêt
         for (MessageListenerContainer container : registry.getListenerContainers()) {
             ContainerTestUtils.waitForAssignment(container, 1);
         }
@@ -55,7 +56,6 @@ class IncidentEventsConsumerTest {
 
         kafkaTemplate.send("incident-events", message);
 
-        // Réessaie toutes les 200 ms, jusqu'à 30 s maximum (CI lente)
         await().atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(200))
                 .until(() -> notificationService.getNotifications().stream()
