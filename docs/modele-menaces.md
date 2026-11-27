@@ -79,3 +79,5 @@ Chaque menace est associée à une preuve de test ou d'audit disponible dans le 
 | Configuration k3s (moindre privilège) | SA default sans binding | `docs/preuves/SCRUM-64/networkpolicy-test.txt` (section ServiceAccounts) |
 
 **Note :** Les preuves marquées "À faire" correspondent aux cartes SCRUM-65 (rate limiting, authentification simulateur) qui seront traitées au Sprint 6.
+
+**Mise à jour (FR-22) :** L'envoi d'e-mail pour les incidents critiques est implémenté dans le service `notifications` (via `EmailService` et Spring Boot Mail). Un test unitaire (`IncidentEventsConsumerTest`) valide le déclenchement de l'envoi si la sévérité est `CRITICAL`.
