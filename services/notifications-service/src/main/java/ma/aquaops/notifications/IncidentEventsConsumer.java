@@ -13,11 +13,13 @@ public class IncidentEventsConsumer {
     private final NotificationController notificationController;
     private final AuditLogRepository auditLogRepository;
     private final JsonMapper jsonMapper;
+    private final EmailService emailService;
 
-    public IncidentEventsConsumer(NotificationController notificationController, AuditLogRepository auditLogRepository, JsonMapper jsonMapper) {
+    public IncidentEventsConsumer(NotificationController notificationController, AuditLogRepository auditLogRepository, JsonMapper jsonMapper, EmailService emailService) {
         this.notificationController = notificationController;
         this.auditLogRepository = auditLogRepository;
         this.jsonMapper = jsonMapper;
+        this.emailService = emailService;
     }
 
     @KafkaListener(topics = "incident-events", groupId = "notifications-service")
@@ -28,8 +30,8 @@ public class IncidentEventsConsumer {
             var eventVersion = node.path("eventVersion").asString("");
             if (!"1".equals(eventVersion)) {
                 System.out.println("Version d'événement inconnue ignorée : " + eventVersion);
-                ack.acknowledge(); 
-                return; 
+                ack.acknowledge();
+                return;
             }
 
             var eventType = node.path("eventType").asString("");
@@ -48,6 +50,12 @@ public class IncidentEventsConsumer {
             notificationController.sendNotification(notification);
             System.out.println("Notification envoyée: " + notification);
 
+            // FR-22 : Envoi d'e-mail si l'incident est critique
+            var severity = node.path("severity").asString("");
+            if ("CRITICAL".equals(severity)) {
+                emailService.sendCriticalIncidentEmail(incidentId, zoneId);
+            }
+
             String what = eventType + " sur l'incident " + incidentId + " (zone " + zoneId + ")";
             AuditLog auditLog = new AuditLog("system", occurredAt, what);
             auditLogRepository.save(auditLog);
@@ -56,7 +64,7 @@ public class IncidentEventsConsumer {
             ack.acknowledge();
 
         } catch (Exception e) {
-            System.err.println("Erreur lors du traitement du message : " + e.getMessage()); 
+            System.err.println("Erreur lors du traitement du message : " + e.getMessage());
             e.printStackTrace();
         }
     }
